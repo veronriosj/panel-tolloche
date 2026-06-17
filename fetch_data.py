@@ -25,12 +25,12 @@ def main():
     print(f"Equipos: {len(mobiles)}")
 
     # Guardar
-    os.makedirs("data", exist_ok=True)
+    os.makedirs("datos", exist_ok=True)
     payload = {
         "updated_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
         "mobiles": mobiles
     }
-    with open("data/geoagris.json", "w", encoding="utf-8") as f:
+    with open("datos/geoagris.json", "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False)
     print("Guardado en data/geoagris.json")
 
