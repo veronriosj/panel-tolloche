@@ -192,7 +192,7 @@ table.mt tbody td{padding:6px 9px;border-bottom:1px solid var(--br);vertical-ali
 </header>
 <div class="tabs">
   <button class="tab active" onclick="showTab('t-est',this)">⏱ Estados GeoAgris</button>
-  <button class="tab" onclick="showTab('t-jot',this)">📋 Registros Jotform</button>
+  <button class="tab" onclick="showTab('t-jot',this)">📋 Registros</button>
   <button class="tab" onclick="showTab('t-stk',this)">🔧 Stock Repuestos</button>
   <button class="tab" onclick="showTab('t-ped',this)">🛒 Pedidos Taller</button>
   <button class="tab" onclick="showTab('t-pedsta',this)">📈 Estadística Pedidos</button>
@@ -256,7 +256,7 @@ table.mt tbody td{padding:6px 9px;border-bottom:1px solid var(--br);vertical-ali
 <div id="t-jot" class="panel">
   <div class="ks" id="ks-jot"></div>
   <div class="card">
-    <div class="ch"><h3>Registros diarios — Jotform</h3><span id="jcnt" style="font-size:.75rem;color:var(--tx2)">Cargando...</span></div>
+    <div class="ch"><h3>Registros de novedades</h3><span id="jcnt" style="font-size:.75rem;color:var(--tx2)">Cargando...</span></div>
     <div class="cb">
       <div class="fil">
         <input type="text" id="ftxj" placeholder="Buscar equipo, descripción, operario..." oninput="filJot()">
@@ -434,7 +434,7 @@ table.mt tbody td{padding:6px 9px;border-bottom:1px solid var(--br);vertical-ali
     <div class="card"><div class="ch"><h3>Presión actual por pivot (psi)</h3></div><div class="cb"><div class="cwt"><canvas id="cg-pr"></canvas></div></div></div>
   </div>
   <div class="g2" style="margin-top:12px">
-    <div class="card"><div class="ch"><h3>Estados — Registros Jotform</h3></div><div class="cb"><div class="cwt"><canvas id="cj-est"></canvas></div></div></div>
+    <div class="card"><div class="ch"><h3>Estados — Registros</h3></div><div class="cb"><div class="cwt"><canvas id="cj-est"></canvas></div></div></div>
     <div class="card"><div class="ch"><h3>Estados — Pedidos Taller</h3></div><div class="cb"><div class="cwt"><canvas id="cp-est"></canvas></div></div></div>
   </div>
   <div class="g2" style="margin-top:12px">
@@ -630,18 +630,30 @@ async function getMSToken(){
 
 async function fetchMSForms(){
   try{
-    await getMSToken();
-    const url=`https://graph.microsoft.com/v1.0/sites/${MS_SITE}/lists/${MS_LIST_ID}/items?expand=fields&$top=999&$orderby=fields/Fecha desc`;
-    const r=await fetch(url,{headers:{Authorization:`Bearer ${msToken}`}});
-    if(!r.ok)throw new Error("Graph API error: "+r.status);
+    console.log("MS Forms: obteniendo token...");
+    const tok=await getMSToken();
+    if(!tok){console.error("MS Forms: no se obtuvo token");return;}
+    console.log("MS Forms: token OK, consultando SharePoint...");
+    const url=`https://graph.microsoft.com/v1.0/sites/${MS_SITE}/lists/${MS_LIST_ID}/items?expand=fields&$top=999`;
+    const r=await fetch(url,{headers:{Authorization:`Bearer ${tok}`}});
+    console.log("MS Forms: respuesta HTTP",r.status);
+    if(!r.ok){
+      const err=await r.text();
+      console.error("MS Forms error:",r.status,err.slice(0,300));
+      return;
+    }
     const d=await r.json();
+    console.log("MS Forms: items recibidos:",d.value?.length||0);
+    if(d.value&&d.value.length>0){
+      console.log("MS Forms: primer item fields:",JSON.stringify(d.value[0].fields));
+    }
     msData=(d.value||[]).map(item=>{
       const f=item.fields||{};
       return{
         id:"ms_"+item.id,
-        equipo:f.Equipo||"",
-        fecha:f.Fecha||"",
-        descripcion:f.Descripcion||"",
+        equipo:f.Equipo||f.Title||"",
+        fecha:f.Fecha||f.Created||"",
+        descripcion:f.Descripcion||f.Description||"",
         ubicacion:f.Ubicacion||"",
         trabajo:f.Trabajos||"",
         repuesto:f.Repuesto||"",
@@ -652,14 +664,13 @@ async function fetchMSForms(){
         pedido:f.Pedido||"",
         queEs:f.QueEs||"",
         ubicacionEsp:f.UbicacionEsp||"",
-        masas:detectarMasas((f.Descripcion||"")+" "+(f.Trabajos||"")),
+        masas:detectarMasas((f.Descripcion||f.Description||"")+" "+(f.Trabajos||"")),
         fuente:"MSForms"
       };
-    });
-    console.log(`MS Forms: ${msData.length} registros cargados`);
-    combinarYRenderizar();
+    }).filter(r=>r.equipo);
+    console.log(`MS Forms: ${msData.length} registros con equipo`);
   }catch(e){
-    console.warn("Microsoft Forms/SharePoint:",e);
+    console.error("MS Forms/SharePoint excepción:",e.message||e);
   }
 }
 
