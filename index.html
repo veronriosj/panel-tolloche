@@ -608,69 +608,21 @@ table.mt tbody td{padding:6px 9px;border-bottom:1px solid var(--br);vertical-ali
 <div class="tip" id="tip"></div>
 
 <script>
-// ── MICROSOFT GRAPH — SharePoint ─────────────────
-const MS_TENANT="4a67ffcd-8647-4abd-91eb-105e4ff520c9";
-const MS_CLIENT_ID="4e025307-d4a3-4d48-8eb3-ca1a0861ee17";
-const MS_CLIENT_SECRET="fec8Q~MRhzlgz7mpmvw3pHEMvl2j2Ipsq3TzlbsD";
-const MS_SITE="liagargentina.sharepoint.com:/sites/ServiciosFT:";
-const MS_LIST_ID="1b181ab0-82f7-4026-852d-e9da0eca3a0b";
-let msToken=null;
-let msData=[]; // registros de Microsoft Forms via SharePoint
-
-async function getMSToken(){
-  const r=await fetch(`https://login.microsoftonline.com/${MS_TENANT}/oauth2/v2.0/token`,{
-    method:"POST",
-    headers:{"Content-Type":"application/x-www-form-urlencoded"},
-    body:`grant_type=client_credentials&client_id=${MS_CLIENT_ID}&client_secret=${encodeURIComponent(MS_CLIENT_SECRET)}&scope=https://graph.microsoft.com/.default`
-  });
-  const d=await r.json();
-  msToken=d.access_token;
-  return msToken;
-}
+// ── MICROSOFT FORMS — lee data/msforms.json generado por GitHub Actions ──
+let msData=[];
 
 async function fetchMSForms(){
   try{
-    console.log("MS Forms: obteniendo token...");
-    const tok=await getMSToken();
-    if(!tok){console.error("MS Forms: no se obtuvo token");return;}
-    console.log("MS Forms: token OK, consultando SharePoint...");
-    const url=`https://graph.microsoft.com/v1.0/sites/${MS_SITE}/lists/${MS_LIST_ID}/items?expand=fields&$top=999`;
-    const r=await fetch(url,{headers:{Authorization:`Bearer ${tok}`}});
-    console.log("MS Forms: respuesta HTTP",r.status);
-    if(!r.ok){
-      const err=await r.text();
-      console.error("MS Forms error:",r.status,err.slice(0,300));
-      return;
-    }
+    const r=await fetch("data/msforms.json?t="+Date.now());
+    if(!r.ok){console.warn("msforms.json no encontrado todavía");return;}
     const d=await r.json();
-    console.log("MS Forms: items recibidos:",d.value?.length||0);
-    if(d.value&&d.value.length>0){
-      console.log("MS Forms: primer item fields:",JSON.stringify(d.value[0].fields));
-    }
-    msData=(d.value||[]).map(item=>{
-      const f=item.fields||{};
-      return{
-        id:"ms_"+item.id,
-        equipo:f.Equipo||f.Title||"",
-        fecha:f.Fecha||f.Created||"",
-        descripcion:f.Descripcion||f.Description||"",
-        ubicacion:f.Ubicacion||"",
-        trabajo:f.Trabajos||"",
-        repuesto:f.Repuesto||"",
-        operario:f.Operario||"",
-        tipo:f.TipoMant||"",
-        gravedad:f.Gravedad||"",
-        horas:f.Horas||"",
-        pedido:f.Pedido||"",
-        queEs:f.QueEs||"",
-        ubicacionEsp:f.UbicacionEsp||"",
-        masas:detectarMasas((f.Descripcion||f.Description||"")+" "+(f.Trabajos||"")),
-        fuente:"MSForms"
-      };
-    }).filter(r=>r.equipo);
-    console.log(`MS Forms: ${msData.length} registros con equipo`);
+    msData=(d.registros||[]).map(item=>({
+      ...item,
+      masas:detectarMasas((item.descripcion||"")+" "+(item.trabajo||""))
+    })).filter(r=>r.equipo);
+    console.log(`MS Forms: ${msData.length} registros cargados desde data/msforms.json`);
   }catch(e){
-    console.error("MS Forms/SharePoint excepción:",e.message||e);
+    console.warn("MS Forms:",e.message||e);
   }
 }
 
