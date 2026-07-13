@@ -33,7 +33,11 @@ def fetch_geo(now, now_str):
     r2 = requests.post(f"{BASE}/get_mobiles",
         json={"session_id": session, "version_id": "3.5"}, timeout=30)
     r2.raise_for_status()
-    mobiles = r2.json().get("result", [])
+    try:
+        mobiles = r2.json().get("result", [])
+    except Exception as e:
+        print(f"ERROR parseando get_mobiles: {e} | respuesta: {r2.text[:200]}")
+        mobiles = []
     print(f"Equipos: {len(mobiles)}")
 
     os.makedirs("data", exist_ok=True)
@@ -140,8 +144,14 @@ def main():
     now_str = now.strftime("%Y-%m-%d %H:%M")
     print(f"[{now_str} UTC] Iniciando fetch...")
     os.makedirs("data", exist_ok=True)
-    fetch_geo(now, now_str)
-    fetch_msforms()
+    try:
+        fetch_geo(now, now_str)
+    except Exception as e:
+        print(f"ERROR en fetch_geo: {e}")
+    try:
+        fetch_msforms()
+    except Exception as e:
+        print(f"ERROR en fetch_msforms: {e}")
 
 if __name__ == "__main__":
     main()
