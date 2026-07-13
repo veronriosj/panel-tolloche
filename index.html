@@ -656,17 +656,23 @@ async function fetchMSForms(){
         fuente:"MSForms"
       };
     });
-    // Combinar con jotData (jotData primero para mantener histórico)
-    const todosIds=new Set(jotData.map(r=>r.id));
-    const soloMS=msData.filter(r=>!todosIds.has(r.id));
-    jotData=[...jotData,...soloMS];
-    document.getElementById("jcnt").textContent=jotData.length+" registros (Jotform + MS Forms) · "+new Date().toLocaleTimeString("es-AR");
-    bTabJot();renderKPIsJot();
-    if(stB)bStats();
     console.log(`MS Forms: ${msData.length} registros cargados`);
+    combinarYRenderizar();
   }catch(e){
     console.warn("Microsoft Forms/SharePoint:",e);
   }
+}
+
+function combinarYRenderizar(){
+  // Combinar jotData + msData sin duplicados, ordenados por fecha desc
+  const todosIds=new Set(jotData.map(r=>r.id));
+  const soloMS=msData.filter(r=>!todosIds.has(r.id));
+  const combinados=[...jotData,...soloMS].sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
+  // Reemplazar jotData con el combinado
+  jotData=combinados;
+  document.getElementById("jcnt").textContent=jotData.length+" registros · "+new Date().toLocaleTimeString("es-AR");
+  bTabJot();renderKPIsJot();
+  if(stB)bStats();
 }
 
 const GEO_USER="fincatolloche",GEO_PASS="geoagris2019",GEO_BASE="https://s.agriexplorer.net/index.php/api/rest";
@@ -788,10 +794,8 @@ async function fetchJot(){
     pedidosData=jotData.filter(r=>r.pedido&&r.pedido.trim()!=="");
     pedidosData.forEach(r=>{ r.items=parsearPedido(r.pedido); });
     document.getElementById("pcnt")&&(document.getElementById("pcnt").textContent=pedidosData.length+" pedido(s) activo(s)");
-    document.getElementById("jcnt").textContent=jotData.length+" registros · "+new Date().toLocaleTimeString("es-AR");
-    bTabJot();renderKPIsJot();
     pobFilPed();filPed();
-    if(stB)bStats();
+    // No renderiza tabla aquí — combinarYRenderizar() lo hace después de cargar MS Forms
   }catch(e){console.warn("Jotform:",e);}
 }
 
@@ -2133,14 +2137,18 @@ pobFil();
 renderKPIs();
 fetchStock();
 bGantt();
-cargarEstadosTarea().then(()=>{fetchJot();});
+cargarEstadosTarea().then(async ()=>{
+  await Promise.all([fetchJot(), fetchMSForms()]);
+  combinarYRenderizar();
+});
 fetchGeo();
 cargarBGdesdeGitHub();
 fetchReparaciones().then(()=>renderBG());
 setInterval(fetchGeo,5*60*1000);
-setInterval(fetchJot,10*60*1000);
-setInterval(fetchMSForms,10*60*1000);
+setInterval(()=>{
+  jotData=[];msData=[];
+  Promise.all([fetchJot(),fetchMSForms()]).then(combinarYRenderizar);
+},10*60*1000);
 </script>
 </body>
 </html>
-  
