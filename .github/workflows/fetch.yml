@@ -19,7 +19,7 @@ jobs:
       - name: Fetch data
         run: python fetch_data.py
         continue-on-error: true
-- name: Commit and push
+      - name: Commit and push
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
