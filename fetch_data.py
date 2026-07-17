@@ -156,5 +156,26 @@ try:
 
 except Exception as e:
     print(f"ERROR MS Forms: {e}")
-
+# ══════════════════════════════════════════
+# 3. RIEGO FT (Balance Hídrico - Pepe Aguilar) - SOLO LECTURA
+# ══════════════════════════════════════════
+print("--- Riego FT (Balance Hídrico) ---")
+SUPA_URL_FT = "https://bnaurkovjdnclxtzvdsf.supabase.co"
+SUPA_KEY_FT = "sb_publishable_xKVmeWVkpwJIKNW7P98wNQ_gaMppuM1"
+RIEGO_FT_FILE = "data/riego_ft.json"
+try:
+    headers_supa = {"apikey": SUPA_KEY_FT, "Authorization": f"Bearer {SUPA_KEY_FT}"}
+    r4 = requests.get(
+        f"{SUPA_URL_FT}/rest/v1/riegos?select=*&order=orden.desc",
+        headers=headers_supa, timeout=30
+    )
+    r4.raise_for_status()
+    riego_ft = r4.json()
+    print(f"Programas de riego FT: {len(riego_ft)}")
+    with open(RIEGO_FT_FILE, "w", encoding="utf-8") as f:
+        json.dump({"updated_at": now_str + " UTC", "registros": riego_ft}, f, ensure_ascii=False)
+    print("riego_ft.json guardado")
+except Exception as e:
+    print(f"ERROR Riego FT: {e}")
+    
 print("Fetch completado.")
