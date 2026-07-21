@@ -1,31 +1,10 @@
-name: Fetch GeoAgris data
-on:
-  schedule:
-    - cron: '*/5 * * * *'
-  workflow_dispatch:
-jobs:
-  fetch:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install dependencies
-        run: pip install requests
-      - name: Fetch data
-        run: python fetch_data.py
-        continue-on-error: true
-      - name: Commit and push
+- name: Commit and push
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add data/geoagris.json data/historial.json data/msforms.json data/riego_ft.json || true
           git stash || true
           git pull --rebase origin main
           git stash pop || true
+          git add data/geoagris.json data/historial.json data/msforms.json data/riego_ft.json || true
           git diff --staged --quiet || git commit -m "Update data $(date -u '+%H:%M UTC')"
           git push
