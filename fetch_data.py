@@ -76,6 +76,7 @@ try:
         nombre = m.get("mobile_name", mid)
         activo = (m.get("mobile_pseudostatus") or "").strip().lower() == "si"
         status = m.get("mobile_status", "")
+        lote_actual = (m.get("field_name") or "").strip()
         pres_obj = next((x for x in m.get("measures", [])
             if any(k in (x.get("name","")).lower() for k in ["pres","bar","psi"])), None)
         pres_val = round(float(pres_obj["value"]), 1) if pres_obj and float(pres_obj.get("value", 0)) > 1 else None
@@ -86,6 +87,7 @@ try:
         historial[mid]["nombre"] = nombre
         historial[mid]["registros"].append({
             "t": now_str, "activo": activo, "status": status,
+            "lote": lote_actual,
             "psi": pres_val, "unit": pres_unit
         })
         historial[mid]["registros"] = [
