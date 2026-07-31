@@ -26,6 +26,6 @@ jobs:
           git stash || true
           git pull --rebase origin main
           git stash pop || true
-          git add data/geoagris.json data/historial.json data/msforms.json data/riego_ft.json || true
+          git add data/geoagris.json data/historial.json data/msforms.json data/riego_ft.json data/alertas_ft.json data/alertas_estado.json || true
           git diff --staged --quiet || git commit -m "Update data $(date -u '+%H:%M UTC')"
           git push
