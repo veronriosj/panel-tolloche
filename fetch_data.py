@@ -194,6 +194,7 @@ print("--- Alertas de fin de lote ---")
 ALERTAS_FILE = "data/alertas_ft.json"
 ALERTAS_ESTADO_FILE = "data/alertas_estado.json"
 UMBRAL_HORAS_ALERTA = 1.5  # avisa cuando falten esta cantidad de horas o menos
+UMBRAL_MIN_PARADO = 25  # avisa si un equipo con programa pendiente lleva parado (o sin señal) 25+ min seguidos
 
 # Metros de recorrido reales por lote (misma tabla que usa el dashboard,
 # calculada de la planimetría oficial Planimetria_unida_FT_Iri.shp)
@@ -225,6 +226,53 @@ def horas_teoricas(lote, pct):
         return None
     velocidad = pct * 2.25  # m/h
     return metros / velocidad
+
+def minutos_parado_o_sin_senal(registros, ahora):
+    """Devuelve (motivo, minutos) si el equipo lleva UMBRAL_MIN_PARADO+ minutos
+    sin transmitir, o transmitiendo pero con activo=False de forma sostenida
+    (no cuenta las paradas cortas normales del ciclo Valley). Si está bien, (None, 0)."""
+    regs = sorted(registros or [], key=lambda r: r["t"])
+    if not regs:
+        return (None, 0)
+    ultimo = regs[-1]
+    ultimo_t = datetime.strptime(ultimo["t"], "%Y-%m-%d %H:%M")
+    minutos_sin_dato = (ahora - ultimo_t).total_seconds() / 60
+    if minutos_sin_dato >= UMBRAL_MIN_PARADO:
+        return ("sin_señal", minutos_sin_dato)
+    if not ultimo.get("activo"):
+        # Cuánto tiempo lleva parado de forma consecutiva (mirando hacia atrás
+        # desde el último registro, mientras siga viniendo activo=False)
+        inicio_parada = ultimo_t
+        for r in reversed(regs[:-1]):
+            if r.get("activo"):
+                break
+            inicio_parada = datetime.strptime(r["t"], "%Y-%m-%d %H:%M")
+        minutos_parado = (ultimo_t - inicio_parada).total_seconds() / 60
+        if minutos_parado >= UMBRAL_MIN_PARADO:
+            return ("parado", minutos_parado)
+    return (None, 0)
+
+def destinatarios_turno(equipo, turno, turnos_ft):
+    """Devuelve (operador_nombre, operador_tg, capataz_dict, set_de_chat_ids_a_avisar)."""
+    info_equipo = (turnos_ft.get("porEquipo") or {}).get(equipo, {})
+    if turno == "dia":
+        operador_nombre = info_equipo.get("diaNombre", "")
+        operador_tg = info_equipo.get("diaTg", "")
+        capataz = turnos_ft.get("capatazDia", {})
+    else:
+        operador_nombre = info_equipo.get("nocheNombre", "")
+        operador_tg = info_equipo.get("nocheTg", "")
+        capataz = turnos_ft.get("capatazNoche", {})
+    destinatarios = set()
+    if operador_tg: destinatarios.add(operador_tg)
+    if capataz.get("telegram"): destinatarios.add(capataz["telegram"])
+    for c in (turnos_ft.get("mantenimiento") or []):
+        if c.get("telegram"): destinatarios.add(c["telegram"])
+    for c in (turnos_ft.get("encargados") or []):
+        if c.get("telegram"): destinatarios.add(c["telegram"])
+    miguel_tg = (turnos_ft.get("miguel") or {}).get("telegram")
+    if miguel_tg: destinatarios.add(miguel_tg)
+    return operador_nombre, operador_tg, capataz, destinatarios
 
 try:
     alertas = []
@@ -267,7 +315,8 @@ try:
             if "riego" not in nombre.lower():
                 continue
             equipo = equipo_desde_nombre_geo(nombre)
-            transiciones = detectar_transiciones_lote(info.get("registros", []))
+            registros_equipo = info.get("registros", [])
+            transiciones = detectar_transiciones_lote(registros_equipo)
             if not transiciones:
                 continue
             ultima = transiciones[-1]
@@ -285,25 +334,19 @@ try:
             if h_teoricas is None:
                 continue
             h_restantes = max(0, h_teoricas - horas_transcurridas)
+            tiene_programa_pendiente = (reg.get("cumpl") or 0) < 100
 
             clave = f"{equipo}|{lote_actual}"
             estado_nuevo[clave] = {"avisado": estado_previo.get(clave, {}).get("avisado", False)}
 
             if h_restantes <= UMBRAL_HORAS_ALERTA and not estado_previo.get(clave, {}).get("avisado"):
-                info_equipo = (turnos_ft.get("porEquipo") or {}).get(equipo, {})
-                if turno == "dia":
-                    operador_nombre = info_equipo.get("diaNombre", "")
-                    operador_tg = info_equipo.get("diaTg", "")
-                    capataz = turnos_ft.get("capatazDia", {})
-                else:
-                    operador_nombre = info_equipo.get("nocheNombre", "")
-                    operador_tg = info_equipo.get("nocheTg", "")
-                    capataz = turnos_ft.get("capatazNoche", {})
+                operador_nombre, operador_tg, capataz, destinatarios_tg = destinatarios_turno(equipo, turno, turnos_ft)
 
                 mensaje = (f"⚠️ El equipo {equipo} está por terminar el lote {lote_actual}. "
                            f"Quedan aprox. {h_restantes:.1f} hs.")
 
                 alertas.append({
+                    "tipo": "fin_de_lote",
                     "equipo": equipo, "lote": lote_actual,
                     "horas_restantes": round(h_restantes, 1),
                     "turno": turno,
@@ -312,21 +355,37 @@ try:
                     "mensaje": mensaje, "generado": now_str + " UTC"
                 })
                 estado_nuevo[clave]["avisado"] = True
-
-                # --- Envío real por Telegram ---
-                destinatarios_tg = set()
-                if operador_tg: destinatarios_tg.add(operador_tg)
-                if capataz.get("telegram"): destinatarios_tg.add(capataz["telegram"])
-                for c in (turnos_ft.get("mantenimiento") or []):
-                    if c.get("telegram"): destinatarios_tg.add(c["telegram"])
-                for c in (turnos_ft.get("encargados") or []):
-                    if c.get("telegram"): destinatarios_tg.add(c["telegram"])
-                miguel_tg = (turnos_ft.get("miguel") or {}).get("telegram")
-                if miguel_tg: destinatarios_tg.add(miguel_tg)
                 for chat_id in destinatarios_tg:
                     enviar_telegram(chat_id, mensaje)
             elif h_restantes > UMBRAL_HORAS_ALERTA:
                 estado_nuevo[clave]["avisado"] = False  # se resetea si vuelve a haber margen (ej. nuevo lote)
+
+            # --- Alerta de equipo parado / sin señal (solo si tiene programa pendiente) ---
+            clave_parado = f"{equipo}|parado"
+            if tiene_programa_pendiente:
+                motivo, minutos = minutos_parado_o_sin_senal(registros_equipo, ahora)
+                estado_nuevo[clave_parado] = {"avisado": estado_previo.get(clave_parado, {}).get("avisado", False)}
+                if motivo and not estado_previo.get(clave_parado, {}).get("avisado"):
+                    operador_nombre, operador_tg, capataz, destinatarios_tg = destinatarios_turno(equipo, turno, turnos_ft)
+                    if motivo == "sin_señal":
+                        mensaje_p = (f"📡 El equipo {equipo} (lote {lote_actual}) no manda señal hace "
+                                     f"{minutos:.0f} min. Revisar conectividad/GPS.")
+                    else:
+                        mensaje_p = (f"🛑 El equipo {equipo} (lote {lote_actual}) está parado hace "
+                                     f"{minutos:.0f} min y tiene programa pendiente.")
+                    alertas.append({
+                        "tipo": "equipo_parado", "motivo": motivo,
+                        "equipo": equipo, "lote": lote_actual, "minutos": round(minutos),
+                        "turno": turno,
+                        "operador": operador_nombre, "operador_telegram": operador_tg,
+                        "capataz": capataz.get("nombre",""), "capataz_telegram": capataz.get("telegram",""),
+                        "mensaje": mensaje_p, "generado": now_str + " UTC"
+                    })
+                    estado_nuevo[clave_parado]["avisado"] = True
+                    for chat_id in destinatarios_tg:
+                        enviar_telegram(chat_id, mensaje_p)
+                elif not motivo:
+                    estado_nuevo[clave_parado]["avisado"] = False  # se resetea si vuelve a andar
 
     with open(ALERTAS_FILE, "w", encoding="utf-8") as f:
         json.dump({"updated_at": now_str + " UTC", "alertas": alertas}, f, ensure_ascii=False)
