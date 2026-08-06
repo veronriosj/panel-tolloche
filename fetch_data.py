@@ -293,11 +293,11 @@ try:
                 info_equipo = (turnos_ft.get("porEquipo") or {}).get(equipo, {})
                 if turno == "dia":
                     operador_nombre = info_equipo.get("diaNombre", "")
-                    operador_wa = info_equipo.get("diaWa", "")
+                    operador_tg = info_equipo.get("diaTg", "")
                     capataz = turnos_ft.get("capatazDia", {})
                 else:
                     operador_nombre = info_equipo.get("nocheNombre", "")
-                    operador_wa = info_equipo.get("nocheWa", "")
+                    operador_tg = info_equipo.get("nocheTg", "")
                     capataz = turnos_ft.get("capatazNoche", {})
 
                 mensaje = (f"⚠️ El equipo {equipo} está por terminar el lote {lote_actual}. "
@@ -307,14 +307,24 @@ try:
                     "equipo": equipo, "lote": lote_actual,
                     "horas_restantes": round(h_restantes, 1),
                     "turno": turno,
-                    "operador": operador_nombre, "operador_whatsapp": operador_wa,
-                    "capataz": capataz.get("nombre",""), "capataz_whatsapp": capataz.get("whatsapp",""),
+                    "operador": operador_nombre, "operador_telegram": operador_tg,
+                    "capataz": capataz.get("nombre",""), "capataz_telegram": capataz.get("telegram",""),
                     "mensaje": mensaje, "generado": now_str + " UTC"
                 })
                 estado_nuevo[clave]["avisado"] = True
-                # --- Envío real (desactivado hasta tener Phone Number ID + token) ---
-                # enviar_whatsapp(operador_wa, mensaje)
-                # enviar_whatsapp(capataz.get("whatsapp",""), mensaje)
+
+                # --- Envío real por Telegram ---
+                destinatarios_tg = set()
+                if operador_tg: destinatarios_tg.add(operador_tg)
+                if capataz.get("telegram"): destinatarios_tg.add(capataz["telegram"])
+                for c in (turnos_ft.get("mantenimiento") or []):
+                    if c.get("telegram"): destinatarios_tg.add(c["telegram"])
+                for c in (turnos_ft.get("encargados") or []):
+                    if c.get("telegram"): destinatarios_tg.add(c["telegram"])
+                miguel_tg = (turnos_ft.get("miguel") or {}).get("telegram")
+                if miguel_tg: destinatarios_tg.add(miguel_tg)
+                for chat_id in destinatarios_tg:
+                    enviar_telegram(chat_id, mensaje)
             elif h_restantes > UMBRAL_HORAS_ALERTA:
                 estado_nuevo[clave]["avisado"] = False  # se resetea si vuelve a haber margen (ej. nuevo lote)
 
@@ -327,30 +337,21 @@ try:
 except Exception as e:
     print(f"ERROR Alertas: {e}")
 
-# Función de envío por WhatsApp (Meta Cloud API) - lista para activar
-# cuando tengas WHATSAPP_PHONE_ID y WHATSAPP_TOKEN configurados como
-# variables de entorno / secrets de GitHub Actions.
-def enviar_whatsapp(numero, mensaje):
-    phone_id = os.environ.get("WHATSAPP_PHONE_ID")
-    token = os.environ.get("WHATSAPP_TOKEN")
-    if not phone_id or not token or not numero:
-        return  # todavía no está configurado, no hace nada
+# Envío por Telegram: usa el bot creado con @BotFather. El token va como
+# secret de GitHub Actions (TELEGRAM_BOT_TOKEN), no queda expuesto en el código.
+def enviar_telegram(chat_id, mensaje):
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    if not token or not chat_id:
+        return
     try:
-        requests.post(
-            f"https://graph.facebook.com/v20.0/{phone_id}/messages",
-            headers={"Authorization": f"Bearer {token}"},
-            json={
-                "messaging_product": "whatsapp",
-                "to": numero,
-                "type": "template",
-                "template": {
-                    "name": "alerta_fin_lote",
-                    "language": {"code": "es_AR"},
-                    "components": [{"type":"body","parameters":[{"type":"text","text":mensaje}]}]
-                }
-            }, timeout=15
+        r = requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": mensaje},
+            timeout=15
         )
+        if not r.ok:
+            print(f"Error Telegram a {chat_id}: {r.status_code} {r.text[:150]}")
     except Exception as e:
-        print(f"Error enviando WhatsApp a {numero}: {e}")
+        print(f"Error enviando Telegram a {chat_id}: {e}")
 
 print("Fetch completado.")
