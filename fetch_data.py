@@ -308,6 +308,7 @@ try:
     except Exception:
         estado_previo = {}
     estado_nuevo = {}
+    semana_max_ft = max([r.get("wk", 0) for r in riego_ft], default=None)
 
     if turno:
         for mid, info in historial.items():
@@ -334,7 +335,10 @@ try:
             if h_teoricas is None:
                 continue
             h_restantes = max(0, h_teoricas - horas_transcurridas)
-            tiene_programa_pendiente = (reg.get("cumpl") or 0) < 100
+            # "Pendiente" solo si el registro es de la semana MÁS RECIENTE cargada
+            # (si es de una semana vieja que quedó sin marcar 100%, no cuenta:
+            # ya no es el programa actual de este equipo).
+            tiene_programa_pendiente = (reg.get("wk") == semana_max_ft) and (reg.get("cumpl") or 0) < 100
 
             clave = f"{equipo}|{lote_actual}"
             estado_nuevo[clave] = {"avisado": estado_previo.get(clave, {}).get("avisado", False)}
