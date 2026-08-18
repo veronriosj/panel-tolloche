@@ -1,1 +1,1 @@
-{"updated_at": "2026-08-18 04:59 UTC", "alertas": []}
+{"updated_at": "2026-08-18 05:38 UTC", "alertas": [{"tipo": "fin_de_lote", "equipo": "Q3", "lote": "q34", "horas_restantes": 1.0, "turno": "noche", "operador": "", "operador_telegram": "", "capataz": "", "capataz_telegram": "", "mensaje": "⚠️ El equipo Q3 está por terminar el lote q34. Quedan aprox. 1.0 hs.", "generado": "2026-08-18 05:38 UTC"}]}
