@@ -1,1 +1,1 @@
-{"updated_at": "2026-08-20 14:08 UTC", "alertas": []}
+{"updated_at": "2026-08-20 14:55 UTC", "alertas": [{"tipo": "fin_de_lote", "equipo": "P1", "lote": "p15", "horas_restantes": 1.4, "turno": "dia", "operador": "", "operador_telegram": "", "capataz": "", "capataz_telegram": "", "mensaje": "⚠️ El equipo P1 está por terminar el lote p15. Quedan aprox. 1.4 hs.", "generado": "2026-08-20 14:55 UTC"}]}
