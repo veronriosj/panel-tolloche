@@ -1,1 +1,1 @@
-{"updated_at": "2026-08-22 14:43 UTC", "alertas": [{"tipo": "equipo_parado", "motivo": "parado", "equipo": "R2", "lote": "r23", "minutos": 26, "turno": "dia", "operador": "", "operador_telegram": "", "capataz": "", "capataz_telegram": "", "mensaje": "🛑 El equipo R2 (lote r23) está parado hace 26 min y tiene programa pendiente.", "generado": "2026-08-22 14:43 UTC"}]}
+{"updated_at": "2026-08-22 15:01 UTC", "alertas": []}
