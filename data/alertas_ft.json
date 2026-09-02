@@ -1,1 +1,1 @@
-{"updated_at": "2026-09-02 01:06 UTC", "alertas": [{"tipo": "fin_de_lote", "equipo": "O1", "lote": "o14", "horas_restantes": 0.2, "turno": "noche", "operador": "", "operador_telegram": "", "capataz": "", "capataz_telegram": "", "mensaje": "⚠️ El equipo O1 está por terminar el lote o14. Quedan aprox. 0.2 hs.", "generado": "2026-09-02 01:06 UTC"}]}
+{"updated_at": "2026-09-02 05:49 UTC", "alertas": []}
