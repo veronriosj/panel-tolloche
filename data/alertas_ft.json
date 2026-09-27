@@ -1,1 +1,1 @@
-{"updated_at": "2026-09-27 10:31 UTC", "alertas": [{"tipo": "equipo_parado", "motivo": "parado", "equipo": "Q1Norte", "lote": "q13", "minutos": 328, "turno": "dia", "operador": "", "operador_telegram": "", "capataz": "", "capataz_telegram": "", "mensaje": "🛑 El equipo Q1Norte (lote q13) está parado hace 328 min y tiene programa pendiente.", "generado": "2026-09-27 10:31 UTC"}]}
+{"updated_at": "2026-09-27 15:16 UTC", "alertas": []}
