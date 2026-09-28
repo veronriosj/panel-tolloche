@@ -1702,59 +1702,29 @@ function srtS(col){
 const GH_OWNER="veronriosj";
 const GH_REPO="panel-tolloche";
 const STOCK_CSV_URL=`https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/main/data/stock_riego.csv`;
-// SharePoint via MS Graph — reemplaza JSONBin
-const SP_SITE="liagargentina.sharepoint.com:/sites/ServiciosFT:";
-const SP_LIST_BG="3d14b982-29a1-46ca-9185-c9b7aa3716e7";      // BombasGeneradores
-const SP_LIST_ESTADOS="55801e3f-34c5-4ee8-b92b-2affdfe19e08"; // EstadosTareas
-const SP_GRAPH="https://graph.microsoft.com/v1.0";
-let _spToken=null, _spTokenExp=0;
-const SP_TOKEN_URL="https://raw.githubusercontent.com/veronriosj/panel-tolloche/main/data/ms_token.json";
-async function spToken(){
-  const now=Math.floor(Date.now()/1000);
-  if(_spToken&&_spTokenExp>now)return _spToken;
-  const r=await fetch(SP_TOKEN_URL+"?t="+Date.now(),{cache:"no-store"});
-  if(!r.ok)throw new Error("No se pudo leer token de GitHub: "+r.status);
+// GitHub API — almacenamiento de datos del panel
+const GH_TOKEN="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";
+const GH_API="https://api.github.com";
+const GH_BRANCH="main";
+const GH_FILE_BG="data/bg_data.json";
+const GH_FILE_ESTADOS="data/estados_ft.json";
+const GH_HEADERS={"Authorization":"token "+GH_TOKEN,"Content-Type":"application/json","Accept":"application/vnd.github+json"};
+
+async function ghLeer(path){
+  const url=`${GH_API}/repos/${GH_OWNER}/${GH_REPO}/contents/${path}?ref=${GH_BRANCH}&t=${Date.now()}`;
+  const r=await fetch(url,{headers:GH_HEADERS,cache:"no-store"});
+  if(r.status===404)return{contenido:null,sha:null};
+  if(!r.ok)throw new Error("GH GET error "+r.status);
   const j=await r.json();
-  if(!j.access_token)throw new Error("Token inválido en ms_token.json");
-  if(j.expires_at<=now)throw new Error("Token expirado — esperá el próximo ciclo de 5 min");
-  _spToken=j.access_token;
-  _spTokenExp=j.expires_at;
-  return _spToken;
+  const contenido=JSON.parse(atob(j.content.replace(/\n/g,"")));
+  return{contenido,sha:j.sha};
 }
-async function spGet(listId,filter=""){
-  const tok=await spToken();
-  const url=`${SP_GRAPH}/sites/${SP_SITE}/lists/${listId}/items?expand=fields${filter?"&$filter="+filter:""}&$top=999`;
-  const r=await fetch(url,{headers:{Authorization:"Bearer "+tok,"Cache-Control":"no-cache"},cache:"no-store"});
-  if(!r.ok)throw new Error("SP GET error "+r.status);
-  return(await r.json()).value||[];
-}
-async function spPatch(listId,itemId,fields){
-  const tok=await spToken();
-  const r=await fetch(`${SP_GRAPH}/sites/${SP_SITE}/lists/${listId}/items/${itemId}/fields`,{
-    method:"PATCH",
-    headers:{Authorization:"Bearer "+tok,"Content-Type":"application/json"},
-    body:JSON.stringify(fields)
-  });
-  if(!r.ok)throw new Error("SP PATCH error "+r.status+" "+(await r.text()).slice(0,150));
-  return r;
-}
-async function spPost(listId,fields){
-  const tok=await spToken();
-  const r=await fetch(`${SP_GRAPH}/sites/${SP_SITE}/lists/${listId}/items`,{
-    method:"POST",
-    headers:{Authorization:"Bearer "+tok,"Content-Type":"application/json"},
-    body:JSON.stringify({fields})
-  });
-  if(!r.ok)throw new Error("SP POST error "+r.status+" "+(await r.text()).slice(0,150));
-  return await r.json();
-}
-async function spDelete(listId,itemId){
-  const tok=await spToken();
-  const r=await fetch(`${SP_GRAPH}/sites/${SP_SITE}/lists/${listId}/items/${itemId}`,{
-    method:"DELETE",
-    headers:{Authorization:"Bearer "+tok}
-  });
-  if(!r.ok)throw new Error("SP DELETE error "+r.status);
+async function ghGuardar(path,contenido,sha){
+  const body={message:"Update "+path,content:btoa(unescape(encodeURIComponent(JSON.stringify(contenido)))),branch:GH_BRANCH};
+  if(sha)body.sha=sha;
+  const r=await fetch(`${GH_API}/repos/${GH_OWNER}/${GH_REPO}/contents/${path}`,{method:"PUT",headers:GH_HEADERS,body:JSON.stringify(body)});
+  if(!r.ok){const t=await r.text();throw new Error("GH PUT error "+r.status+" "+t.slice(0,150));}
+  return(await r.json()).content.sha;
 }
 let ESTADOS_TAREA={}; // { "submissionId": "pendiente"|"en_proceso"|"finalizado"|"visto" }
 let AVANCE_RIEGO_FT={}; // { "riegoRecordId": 0-100 } - avance cargado por el operario, propio de Panel Tolloche
@@ -1820,21 +1790,14 @@ function filtrarRotacionFT(lista){
 let ROTACION_FT=crearSeedRotacionFT(); // se sobreescribe con lo guardado en el bin al cargar; si no hay nada, queda el seed
 let TURNOS_FT={capatazDia:{nombre:"",whatsapp:"",telegram:""},capatazNoche:{nombre:"",whatsapp:"",telegram:""},porEquipo:{},mantenimiento:[],encargados:[],miguel:{nombre:"",whatsapp:"",telegram:""}};
 
+let _shaEstados=null;
 async function spLeerEstadosMaster(){
-  const items=await spGet(SP_LIST_ESTADOS);
-  const master=items.find(i=>i.fields.ItemId==="MASTER");
-  if(!master)return null;
-  try{return JSON.parse(master.fields.DatosJSON||"{}");}catch{return null;}
+  const{contenido,sha}=await ghLeer(GH_FILE_ESTADOS);
+  _shaEstados=sha;
+  return contenido;
 }
 async function spGuardarEstadosMaster(datos){
-  const items=await spGet(SP_LIST_ESTADOS);
-  const master=items.find(i=>i.fields.ItemId==="MASTER");
-  const json=JSON.stringify(datos);
-  if(master){
-    await spPatch(SP_LIST_ESTADOS,master.id,{DatosJSON:json});
-  } else {
-    await spPost(SP_LIST_ESTADOS,{Title:"MASTER",ItemId:"MASTER",DatosJSON:json});
-  }
+  _shaEstados=await ghGuardar(GH_FILE_ESTADOS,datos,_shaEstados);
 }
 
 async function cargarEstadosTarea(){
@@ -3746,17 +3709,17 @@ function repsLote(lote){
   return[...repsBomba,...repsGen];
 }
 
+let _shaBG=null;
 async function cargarBGdesdeGitHub(){
   try{
     document.getElementById("bg-sync").textContent="Sincronizando...";
-    const items=await spGet(SP_LIST_BG);
-    if(items.length){
-      BG_DATA=items.map(i=>{
-        try{return JSON.parse(i.fields.DatosJSON||"{}");}catch{return null;}
-      }).filter(Boolean);
+    const{contenido,sha}=await ghLeer(GH_FILE_BG);
+    _shaBG=sha;
+    if(contenido&&Array.isArray(contenido)){
+      BG_DATA=contenido;
       bgFilt=[...BG_DATA];
     }
-    document.getElementById("bg-sync").textContent="✓ Sincronizado (SharePoint)";
+    document.getElementById("bg-sync").textContent="✓ Sincronizado (GitHub)";
     renderBG();
   }catch(e){
     console.warn("BG sync:",e);
@@ -3773,51 +3736,13 @@ function guardarBGenGitHub(idsAfectados,idsEliminados){
 }
 
 async function guardarBGenGitHubInterno(idsAfectados,idsEliminados){
-  // Lee ítems actuales de SharePoint para hacer merge puntual (no pisar otros cambios)
   idsAfectados=idsAfectados||[];
   idsEliminados=idsEliminados||[];
-
-  // Traer mapa id -> spItemId desde SharePoint
-  const items=await spGet(SP_LIST_BG);
-  const spMap={}; // bg id -> { spId, datos }
-  items.forEach(i=>{
-    try{
-      const d=JSON.parse(i.fields.DatosJSON||"{}");
-      if(d.id)spMap[d.id]={spId:i.id,datos:d};
-    }catch{}
-  });
-
-  // Eliminar
   for(const id of idsEliminados){
-    if(spMap[id])await spDelete(SP_LIST_BG,spMap[id].spId);
     BG_DATA=BG_DATA.filter(x=>x.id!==id);
   }
-
-  // Crear o actualizar afectados
-  for(const id of idsAfectados){
-    const local=BG_DATA.find(x=>x.id===id);
-    if(!local)continue;
-    const fields={
-      Title:local.lote||id,
-      Lote:local.lote||"",
-      BombaN:local.bomba_n||"",
-      BombaMarca:local.bomba_marca||"",
-      BombaHoras:local.bomba_horas||"",
-      GeneradorN:local.generador_n||"",
-      GenMarca:local.gen_marca||"",
-      GenHoras:local.gen_horas||"",
-      Vibracion:local.vibracion||"",
-      ManchonEstado:local.manchonEstado||"",
-      DatosJSON:JSON.stringify(local)
-    };
-    if(spMap[id]){
-      await spPatch(SP_LIST_BG,spMap[id].spId,fields);
-    } else {
-      await spPost(SP_LIST_BG,fields);
-    }
-  }
-
   bgFilt=[...BG_DATA];
+  _shaBG=await ghGuardar(GH_FILE_BG,BG_DATA,_shaBG);
   return true;
 }
 
