@@ -200,4 +200,32 @@ try:
 except Exception as e:
     print(f"ERROR Stock: {e}")
 
+# ══════════════════════════════════════════
+# 4. TOKEN MS GRAPH para el panel (browser no puede pedirlo por CORS)
+# ══════════════════════════════════════════
+print("--- Token MS Graph para panel ---")
+TOKEN_FILE = "data/ms_token.json"
+try:
+    import time
+    token_r3 = requests.post(
+        f"https://login.microsoftonline.com/{MS_TENANT}/oauth2/v2.0/token",
+        data={
+            "grant_type": "client_credentials",
+            "client_id": MS_CLIENT_ID,
+            "client_secret": MS_CLIENT_SECRET,
+            "scope": "https://graph.microsoft.com/.default"
+        }, timeout=30)
+    token_r3.raise_for_status()
+    tj = token_r3.json()
+    expires_in = tj.get("expires_in", 3600)
+    with open(TOKEN_FILE, "w", encoding="utf-8") as f_tok:
+        json.dump({
+            "access_token": tj["access_token"],
+            "expires_at": int(time.time()) + expires_in - 60,  # 1 min de margen
+            "generated_at": now_str + " UTC"
+        }, f_tok)
+    print(f"ms_token.json guardado (expira en {expires_in}s)")
+except Exception as e:
+    print(f"ERROR token panel: {e}")
+
 print("Fetch completado.")
