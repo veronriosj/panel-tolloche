@@ -1801,22 +1801,14 @@ async function spGuardarEstadosMaster(datos){
 }
 
 async function cargarEstadosTarea(){
-  const MAX_INTENTOS=4;
   let record=null;
-  for(let intento=1;intento<=MAX_INTENTOS;intento++){
-    try{
-      record=await spLeerEstadosMaster();
-      break;
-    }catch(e){
-      console.warn(`Intento ${intento}/${MAX_INTENTOS} de cargar estados falló:`,e);
-    }
-    if(intento<MAX_INTENTOS) await new Promise(res=>setTimeout(res,600*intento));
+  try{
+    record=await spLeerEstadosMaster();
+  }catch(e){
+    console.warn("No se pudo cargar estados, arrancando vacío:",e);
   }
-  if(record===null){
-    console.error("No se pudo cargar el estado guardado después de varios intentos.");
-    alert("No se pudo cargar el estado guardado del servidor (varios intentos fallaron). Si ves campos vacíos, puede que NO estén realmente borrados — recargá la página antes de volver a escribir nada, para no duplicar o pisar datos.");
-    return;
-  }
+  // Si el archivo no existe todavía, arrancamos con estado vacío (se crea al primer guardado)
+  if(record===null) record={};
   ESTADOS_TAREA=record.estados||{};
   AVANCE_RIEGO_FT=record.avanceRiegoFT||{};
   FECHA_INICIO_FT=record.fechaInicioFT||{};
