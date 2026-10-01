@@ -223,20 +223,24 @@ table.mt tbody td{padding:6px 9px;border-bottom:1px solid var(--br);vertical-ali
 <nav class="sidebar" id="sidebar">
   <div class="navgroup">
     <div class="navgroup-title">Riego</div>
-    <button class="tab active" onclick="showTab('t-riegoft',this)">Programas</button>
+    <button class="tab active" onclick="showTab('t-riegoft',this)">Riego FT</button>
     <button class="tab" onclick="showTab('t-eficiencia',this)">Eficiencia</button>
     <button class="tab" onclick="showTab('t-sta',this)">Estadísticas</button>
+    <button class="tab" onclick="showTab('t-rotacion',this)">Rotación</button>
   </div>
   <div class="navgroup">
     <div class="navgroup-title">Equipos</div>
     <button class="tab" onclick="showTab('t-est',this)">Estados GeoAgris</button>
-    <button class="tab" onclick="showTab('t-jot',this)">Reportes</button>
+    <button class="tab" onclick="showTab('t-bg',this)">Bombas y Generadores</button>
   </div>
   <div class="navgroup">
     <div class="navgroup-title">Mantenimiento</div>
-    <button class="tab" onclick="showTab('t-bg',this)">Bombas y Generadores</button>
     <button class="tab" onclick="showTab('t-stk',this)">Stock Repuestos</button>
-    <button class="tab" onclick="showTab('t-ped',this)">Pedidos de compra</button>
+    <button class="tab" onclick="showTab('t-ped',this)">Pedidos Taller</button>
+  </div>
+  <div class="navgroup">
+    <div class="navgroup-title">Reportes</div>
+    <button class="tab" onclick="showTab('t-jot',this)">Registros</button>
   </div>
 </nav>
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
@@ -1806,9 +1810,12 @@ async function cargarEstadosTarea(){
     if(intento<MAX_INTENTOS) await new Promise(res=>setTimeout(res,600*intento)); // espera creciente entre intentos
   }
   if(json===null){
-    // Los 4 intentos fallaron: avisamos claramente en vez de mostrar todo vacío sin decir nada.
+    // Los 4 intentos fallaron: no interrumpimos con un popup — solo dejamos
+    // constancia en consola y en el indicador de arriba, sin tocar lo que ya
+    // estaba en pantalla (para no pisar ni duplicar datos).
     console.error("No se pudo cargar el estado guardado después de varios intentos. Los campos de avance pueden verse vacíos sin estarlo realmente en el servidor — recargá la página antes de volver a cargar datos a mano.");
-    alert("No se pudo cargar el estado guardado del servidor (varios intentos fallaron). Si ves campos vacíos, puede que NO estén realmente borrados — recargá la página antes de volver a escribir nada, para no duplicar o pisar datos.");
+    const updEl=document.getElementById("upd-txt");
+    if(updEl)updEl.textContent="⚠ No se pudo sincronizar el estado guardado (reintentá más tarde)";
     return;
   }
   {
