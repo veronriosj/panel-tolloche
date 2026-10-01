@@ -223,24 +223,20 @@ table.mt tbody td{padding:6px 9px;border-bottom:1px solid var(--br);vertical-ali
 <nav class="sidebar" id="sidebar">
   <div class="navgroup">
     <div class="navgroup-title">Riego</div>
-    <button class="tab active" onclick="showTab('t-riegoft',this)">Riego FT</button>
+    <button class="tab active" onclick="showTab('t-riegoft',this)">Programas</button>
     <button class="tab" onclick="showTab('t-eficiencia',this)">Eficiencia</button>
     <button class="tab" onclick="showTab('t-sta',this)">Estadísticas</button>
-    <button class="tab" onclick="showTab('t-rotacion',this)">Rotación</button>
   </div>
   <div class="navgroup">
     <div class="navgroup-title">Equipos</div>
     <button class="tab" onclick="showTab('t-est',this)">Estados GeoAgris</button>
-    <button class="tab" onclick="showTab('t-bg',this)">Bombas y Generadores</button>
+    <button class="tab" onclick="showTab('t-jot',this)">Reportes</button>
   </div>
   <div class="navgroup">
     <div class="navgroup-title">Mantenimiento</div>
+    <button class="tab" onclick="showTab('t-bg',this)">Bombas y Generadores</button>
     <button class="tab" onclick="showTab('t-stk',this)">Stock Repuestos</button>
-    <button class="tab" onclick="showTab('t-ped',this)">Pedidos Taller</button>
-  </div>
-  <div class="navgroup">
-    <div class="navgroup-title">Reportes</div>
-    <button class="tab" onclick="showTab('t-jot',this)">Registros</button>
+    <button class="tab" onclick="showTab('t-ped',this)">Pedidos de compra</button>
   </div>
 </nav>
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
