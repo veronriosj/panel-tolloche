@@ -391,6 +391,26 @@ table.mt tbody td{padding:6px 9px;border-bottom:1px solid var(--br);vertical-ali
   <div class="ks" id="ks-stk"></div>
   <div class="card">
     <div class="ch">
+      <h3>Stock por rubro — actualizado automático desde Finnegans</h3>
+      <span id="stkr-sync" style="font-size:.72rem;color:var(--tx2)"></span>
+    </div>
+    <div class="cb">
+      <div style="overflow-x:auto">
+        <table class="mt">
+          <thead><tr>
+            <th>Rubro</th>
+            <th>Producto</th>
+            <th>Cantidad</th>
+            <th>Unidad</th>
+            <th>Costo estándar</th>
+          </tr></thead>
+          <tbody id="tb-stkr"><tr><td colspan="5" style="text-align:center;color:var(--tx2)">Cargando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ch">
       <h3>Stock de repuestos — Taller Finca Tolloche (Finnegans)</h3>
       <span id="stk-sync" style="font-size:.72rem;color:var(--tx2)"></span>
     </div>
@@ -505,7 +525,7 @@ table.mt tbody td{padding:6px 9px;border-bottom:1px solid var(--br);vertical-ali
     </div>
     <div class="cb">
       <div id="eficiencia-er-resumen" style="margin-bottom:12px"></div>
-      <div style="font-size:.72rem;color:var(--tx2);font-weight:600;margin-bottom:4px">EFICIENCIA POR EQUIPO (según Avance real)</div>
+      <div style="font-size:.72rem;color:var(--tx2);font-weight:600;margin-bottom:4px">EFICIENCIA POR EQUIPO (según avance del dash de Pepe)</div>
       <div style="max-height:300px;overflow-y:auto">
         <table class="mt" style="font-size:.85rem">
           <thead><tr><th>Equipo</th><th>Programadas</th><th>Regadas (real)</th><th>% Eficiencia</th><th>mm objetivo</th><th>mm regados</th><th>Prom. hs/día real (clic ▼)</th><th>Termina según avance</th><th>Termina teórico (17hs/día)</th><th>Termina según ritmo real</th></tr></thead>
@@ -1702,30 +1722,13 @@ function srtS(col){
 const GH_OWNER="veronriosj";
 const GH_REPO="panel-tolloche";
 const STOCK_CSV_URL=`https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/main/data/stock_riego.csv`;
-// GitHub API — almacenamiento de datos del panel
-const GH_TOKEN="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";
-const GH_API="https://api.github.com";
-const GH_BRANCH="main";
-const GH_FILE_BG="data/bg_data.json";
-const GH_FILE_ESTADOS="data/estados_ft.json";
-const GH_HEADERS={"Authorization":"token "+GH_TOKEN,"Content-Type":"application/json","Accept":"application/vnd.github+json"};
-
-async function ghLeer(path){
-  const url=`${GH_API}/repos/${GH_OWNER}/${GH_REPO}/contents/${path}?ref=${GH_BRANCH}&t=${Date.now()}`;
-  const r=await fetch(url,{headers:GH_HEADERS,cache:"no-store"});
-  if(r.status===404)return{contenido:null,sha:null};
-  if(!r.ok)throw new Error("GH GET error "+r.status);
-  const j=await r.json();
-  const contenido=JSON.parse(atob(j.content.replace(/\n/g,"")));
-  return{contenido,sha:j.sha};
-}
-async function ghGuardar(path,contenido,sha){
-  const body={message:"Update "+path,content:btoa(unescape(encodeURIComponent(JSON.stringify(contenido)))),branch:GH_BRANCH};
-  if(sha)body.sha=sha;
-  const r=await fetch(`${GH_API}/repos/${GH_OWNER}/${GH_REPO}/contents/${path}`,{method:"PUT",headers:GH_HEADERS,body:JSON.stringify(body)});
-  if(!r.ok){const t=await r.text();throw new Error("GH PUT error "+r.status+" "+t.slice(0,150));}
-  return(await r.json()).content.sha;
-}
+// JSONBin para Bombas y Generadores (reemplaza a GitHub por problemas de revocación de tokens)
+const JSONBIN_ID="6a3d06d1da38895dfefcb2cc";
+const JSONBIN_KEY="$2a$10$yvsvPG1yZjdF7yzSo2XohO/g.vdj.1D4Nmy40d.FK21tjKyzGgglC";
+const JSONBIN_API=`https://api.jsonbin.io/v3/b/${JSONBIN_ID}`;
+// Bin separado para estados de tareas (Jotform mantenimiento + Pedidos)
+const ESTADOS_BIN_ID="6a425e98da38895dfe0fadcf";
+const ESTADOS_BIN_API=`https://api.jsonbin.io/v3/b/${ESTADOS_BIN_ID}`;
 let ESTADOS_TAREA={}; // { "submissionId": "pendiente"|"en_proceso"|"finalizado"|"visto" }
 let AVANCE_RIEGO_FT={}; // { "riegoRecordId": 0-100 } - avance cargado por el operario, propio de Panel Tolloche
 const EQUIPOS_RIEGO_FT=["J1","J2","K","L1","L2","L3","M1","M2","O1","O2","P1","P2","P3","P4","P5","Q1norte","Q1sur","Q2","Q3","Q4","Q5","R1","R2","R3"];
@@ -1790,47 +1793,53 @@ function filtrarRotacionFT(lista){
 let ROTACION_FT=crearSeedRotacionFT(); // se sobreescribe con lo guardado en el bin al cargar; si no hay nada, queda el seed
 let TURNOS_FT={capatazDia:{nombre:"",whatsapp:"",telegram:""},capatazNoche:{nombre:"",whatsapp:"",telegram:""},porEquipo:{},mantenimiento:[],encargados:[],miguel:{nombre:"",whatsapp:"",telegram:""}};
 
-let _shaEstados=null;
-async function spLeerEstadosMaster(){
-  const{contenido,sha}=await ghLeer(GH_FILE_ESTADOS);
-  _shaEstados=sha;
-  return contenido;
-}
-async function spGuardarEstadosMaster(datos){
-  _shaEstados=await ghGuardar(GH_FILE_ESTADOS,datos,_shaEstados);
-}
-
 async function cargarEstadosTarea(){
-  let record=null;
-  try{
-    record=await spLeerEstadosMaster();
-  }catch(e){
-    console.warn("No se pudo cargar estados, arrancando vacío:",e);
+  // Si el primer intento de leer falla, NO nos rendimos mostrando todo vacío
+  // (eso parece "se borró todo" sin haberse borrado nada) — reintentamos unas
+  // veces antes de resignarnos a los valores por defecto.
+  const MAX_INTENTOS=4;
+  let json=null;
+  for(let intento=1;intento<=MAX_INTENTOS;intento++){
+    try{
+      const r=await fetch(`${ESTADOS_BIN_API}/latest?t=${Date.now()}_${Math.random()}`,{headers:{"X-Master-Key":JSONBIN_KEY,"Cache-Control":"no-cache, no-store, must-revalidate","Pragma":"no-cache"},cache:"no-store"});
+      if(r.ok){ json=await r.json(); break; }
+      console.warn(`Intento ${intento}/${MAX_INTENTOS} de cargar estados falló (status ${r.status})`);
+    }catch(e){
+      console.warn(`Intento ${intento}/${MAX_INTENTOS} de cargar estados falló:`,e);
+    }
+    if(intento<MAX_INTENTOS) await new Promise(res=>setTimeout(res,600*intento)); // espera creciente entre intentos
   }
-  // Si el archivo no existe todavía, arrancamos con estado vacío (se crea al primer guardado)
-  if(record===null) record={};
-  ESTADOS_TAREA=record.estados||{};
-  AVANCE_RIEGO_FT=record.avanceRiegoFT||{};
-  FECHA_INICIO_FT=record.fechaInicioFT||{};
-  FECHA_FIN_FT=record.fechaFinFT||{};
-  COMENTARIO_FT=record.comentarioFT||{};
-  TURNOS_FT=record.turnosFT||{};
-  TURNOS_FT.capatazDia=TURNOS_FT.capatazDia||{nombre:"",whatsapp:"",telegram:""};
-  TURNOS_FT.capatazNoche=TURNOS_FT.capatazNoche||{nombre:"",whatsapp:"",telegram:""};
-  TURNOS_FT.porEquipo=TURNOS_FT.porEquipo||{};
-  TURNOS_FT.mantenimiento=TURNOS_FT.mantenimiento||[];
-  TURNOS_FT.encargados=TURNOS_FT.encargados||[];
-  TURNOS_FT.miguel=TURNOS_FT.miguel||{nombre:"",whatsapp:"",telegram:""};
-  if(record.rotacionFT){
-    ROTACION_FT=filtrarRotacionFT(record.rotacionFT.map(p=>{
-      if(p.francosPendientes)return{usosProgramados:[],...p};
-      const{francos,...resto}=p;
-      const francosPendientes=[];
-      for(let i=0;i<(francos||0);i++)francosPendientes.push({tipo:"previo",fecha:null});
-      return{...resto,francosPendientes,usosProgramados:[]};
-    }));
-  } else {
-    ROTACION_FT=crearSeedRotacionFT();
+  if(json===null){
+    // Los 4 intentos fallaron: avisamos claramente en vez de mostrar todo vacío sin decir nada.
+    console.error("No se pudo cargar el estado guardado después de varios intentos. Los campos de avance pueden verse vacíos sin estarlo realmente en el servidor — recargá la página antes de volver a cargar datos a mano.");
+    alert("No se pudo cargar el estado guardado del servidor (varios intentos fallaron). Si ves campos vacíos, puede que NO estén realmente borrados — recargá la página antes de volver a escribir nada, para no duplicar o pisar datos.");
+    return;
+  }
+  {
+      ESTADOS_TAREA=(json.record&&json.record.estados)||{};
+      AVANCE_RIEGO_FT=(json.record&&json.record.avanceRiegoFT)||{};
+      FECHA_INICIO_FT=(json.record&&json.record.fechaInicioFT)||{};
+      FECHA_FIN_FT=(json.record&&json.record.fechaFinFT)||{};
+      COMENTARIO_FT=(json.record&&json.record.comentarioFT)||{};
+      TURNOS_FT=(json.record&&json.record.turnosFT)||{};
+      TURNOS_FT.capatazDia=TURNOS_FT.capatazDia||{nombre:"",whatsapp:"",telegram:""};
+      TURNOS_FT.capatazNoche=TURNOS_FT.capatazNoche||{nombre:"",whatsapp:"",telegram:""};
+      TURNOS_FT.porEquipo=TURNOS_FT.porEquipo||{};
+      TURNOS_FT.mantenimiento=TURNOS_FT.mantenimiento||[];
+      TURNOS_FT.encargados=TURNOS_FT.encargados||[];
+      TURNOS_FT.miguel=TURNOS_FT.miguel||{nombre:"",whatsapp:"",telegram:""};
+      if(json.record&&json.record.rotacionFT){
+        ROTACION_FT=filtrarRotacionFT(json.record.rotacionFT.map(p=>{
+          if(p.francosPendientes)return {usosProgramados:[],...p}; // ya está en formato nuevo
+          // Formato viejo (francos:N) guardado antes del cambio: migrar
+          const {francos,...resto}=p;
+          const francosPendientes=[];
+          for(let i=0;i<(francos||0);i++)francosPendientes.push({tipo:"previo",fecha:null});
+          return {...resto,francosPendientes,usosProgramados:[]};
+        }));
+      } else {
+        ROTACION_FT=crearSeedRotacionFT();
+      }
   }
 }
 
@@ -1855,11 +1864,15 @@ function guardarCampoGenericoFT(clave,id,valor){
   return resultado;
 }
 async function guardarCampoGenericoFTInterno(clave,id,valor){
-  const record=await spLeerEstadosMaster()||{};
+  const rGet=await fetch(`${ESTADOS_BIN_API}/latest?t=${Date.now()}_${Math.random()}`,{headers:{"X-Master-Key":JSONBIN_KEY,"Cache-Control":"no-cache, no-store, must-revalidate","Pragma":"no-cache"},cache:"no-store"});
+  if(!rGet.ok)throw new Error("No se pudo leer antes de guardar "+clave+" (status "+rGet.status+"); guardado cancelado.");
+  const j=await rGet.json();
+  const record=j.record||{};
   const bloque=record[clave]||{};
   bloque[id]=valor;
   const body={...record,[clave]:bloque};
-  await spGuardarEstadosMaster(body);
+  const r=await fetch(ESTADOS_BIN_API,{method:"PUT",headers:{"Content-Type":"application/json","X-Master-Key":JSONBIN_KEY},body:JSON.stringify(body)});
+  if(!r.ok)throw new Error("Error al guardar "+clave+": "+r.status);
   ESTADOS_TAREA=record.estados||ESTADOS_TAREA;
   AVANCE_RIEGO_FT=record.avanceRiegoFT||AVANCE_RIEGO_FT;
   return true;
@@ -1900,10 +1913,15 @@ async function guardarComentarioFT(id,valor,inputEl){
 }
 
 async function guardarEstadosTareaInterno(idEstadoTocado,idAvanceTocado){
-  // Lee el MASTER de SP y solo superpone la clave puntual que este usuario
-  // acaba de cambiar — preservando todos los demás bloques.
+  // Lee la versión más reciente del bin ENTERO y solo superpone la clave
+  // puntual que este usuario acaba de cambiar — preservando todos los demás
+  // bloques (turnos, rotación, fechas de inicio, comentarios) tal cual están,
+  // para no pisarlos con un guardado parcial.
   async function leerRemoto(){
-    return (await spLeerEstadosMaster())||{};
+    const rGet=await fetch(`${ESTADOS_BIN_API}/latest?t=${Date.now()}_${Math.random()}`,{headers:{"X-Master-Key":JSONBIN_KEY,"Cache-Control":"no-cache, no-store, must-revalidate","Pragma":"no-cache"},cache:"no-store"});
+    if(!rGet.ok)throw new Error("No se pudo leer el estado remoto (status "+rGet.status+")");
+    const j=await rGet.json();
+    return j.record||{};
   }
 
   async function intentarGuardado(){
@@ -1917,7 +1935,12 @@ async function guardarEstadosTareaInterno(idEstadoTocado,idAvanceTocado){
     if(idAvanceTocado!==undefined&&idAvanceTocado!==null) remotoAvance[idAvanceTocado]=AVANCE_RIEGO_FT[idAvanceTocado];
 
     const body={...remoto,estados:remotoEstados,avanceRiegoFT:remotoAvance};
-    await spGuardarEstadosMaster(body);
+    const r=await fetch(ESTADOS_BIN_API,{
+      method:"PUT",
+      headers:{"Content-Type":"application/json","X-Master-Key":JSONBIN_KEY},
+      body:JSON.stringify(body)
+    });
+    if(!r.ok)throw new Error("Error al guardar estado: "+r.status);
     ESTADOS_TAREA=remotoEstados;
     AVANCE_RIEGO_FT=remotoAvance;
   }
@@ -1949,8 +1972,18 @@ function guardarTurnosFT(){
 }
 
 async function guardarTurnosFTInterno(){
-  const remoto=await spLeerEstadosMaster()||{};
-  await spGuardarEstadosMaster({...remoto,turnosFT:TURNOS_FT});
+  // Lee el bin ENTERO y preserva todos los bloques, solo pisa turnosFT.
+  const rGet=await fetch(`${ESTADOS_BIN_API}/latest?t=${Date.now()}_${Math.random()}`,{headers:{"X-Master-Key":JSONBIN_KEY,"Cache-Control":"no-cache, no-store, must-revalidate","Pragma":"no-cache"},cache:"no-store"});
+  if(!rGet.ok)throw new Error("No se pudo leer el estado remoto antes de guardar turnos (status "+rGet.status+"); guardado cancelado para no pisar datos.");
+  const j=await rGet.json();
+  const remoto=j.record||{};
+
+  const r=await fetch(ESTADOS_BIN_API,{
+    method:"PUT",
+    headers:{"Content-Type":"application/json","X-Master-Key":JSONBIN_KEY},
+    body:JSON.stringify({...remoto,turnosFT:TURNOS_FT})
+  });
+  if(!r.ok)throw new Error("Error al guardar turnos: "+r.status);
   ESTADOS_TAREA=remoto.estados||ESTADOS_TAREA;
   AVANCE_RIEGO_FT=remoto.avanceRiegoFT||AVANCE_RIEGO_FT;
   return true;
@@ -1964,8 +1997,19 @@ function guardarRotacionFT(){
 }
 
 async function guardarRotacionFTInterno(){
-  const remoto=await spLeerEstadosMaster()||{};
-  await spGuardarEstadosMaster({...remoto,rotacionFT:ROTACION_FT});
+  // Mismo patrón seguro: lee el bin entero, preserva todos los bloques, y
+  // cancela si la lectura falla (nunca pisar con valores vacíos).
+  const rGet=await fetch(`${ESTADOS_BIN_API}/latest?t=${Date.now()}_${Math.random()}`,{headers:{"X-Master-Key":JSONBIN_KEY,"Cache-Control":"no-cache, no-store, must-revalidate","Pragma":"no-cache"},cache:"no-store"});
+  if(!rGet.ok)throw new Error("No se pudo leer el estado remoto antes de guardar rotación (status "+rGet.status+"); guardado cancelado.");
+  const j=await rGet.json();
+  const remoto=j.record||{};
+
+  const r=await fetch(ESTADOS_BIN_API,{
+    method:"PUT",
+    headers:{"Content-Type":"application/json","X-Master-Key":JSONBIN_KEY},
+    body:JSON.stringify({...remoto,rotacionFT:ROTACION_FT})
+  });
+  if(!r.ok)throw new Error("Error al guardar rotación: "+r.status);
   ESTADOS_TAREA=remoto.estados||ESTADOS_TAREA;
   AVANCE_RIEGO_FT=remoto.avanceRiegoFT||AVANCE_RIEGO_FT;
   return true;
@@ -2869,9 +2913,9 @@ function renderEficienciaER(){
     ${filtroTxt?`<div style="font-size:.78rem;color:#7c3aed;font-weight:600;margin-bottom:8px">Filtro activo: ${filtroTxt}</div>`:""}
     <div style="display:flex;gap:28px;flex-wrap:wrap">
       <div><div style="font-size:1.4rem;font-weight:700;color:var(--v)">${totalProg.toFixed(1)} hs</div><div style="font-size:.75rem;color:var(--tx2)">Programadas (equipos con programa)</div></div>
-      <div><div style="font-size:1.4rem;font-weight:700;color:#16a34a">${totalReal.toFixed(1)} hs (${pctAvanceTotal.toFixed(0)}%)</div><div style="font-size:.75rem;color:var(--tx2)">Regadas según Avance real (% ponderado)</div></div>
+      <div><div style="font-size:1.4rem;font-weight:700;color:#16a34a">${totalReal.toFixed(1)} hs (${pctAvanceTotal.toFixed(0)}%)</div><div style="font-size:.75rem;color:var(--tx2)">Regadas según avance del dash de Pepe (% ponderado)</div></div>
       <div><div style="font-size:1.4rem;font-weight:700;color:#0369a1">${totalMmProg.toFixed(1)} mm</div><div style="font-size:.75rem;color:var(--tx2)">mm objetivo (programados)</div></div>
-      <div><div style="font-size:1.4rem;font-weight:700;color:#0891b2">${totalMmReal.toFixed(1)} mm (${pctMmTotal.toFixed(0)}%)</div><div style="font-size:.75rem;color:var(--tx2)">mm regados (según Avance real)</div></div>
+      <div><div style="font-size:1.4rem;font-weight:700;color:#0891b2">${totalMmReal.toFixed(1)} mm (${pctMmTotal.toFixed(0)}%)</div><div style="font-size:.75rem;color:var(--tx2)">mm regados (según avance del dash de Pepe)</div></div>
       <div><div style="font-size:1.4rem;font-weight:700;color:#7c2d92">${mmPorHaProg!==null?mmPorHaProg.toFixed(1)+" mm/ha":"—"}</div><div style="font-size:.75rem;color:var(--tx2)">mm/ha objetivo (ponderado por superficie, ${haSum.toFixed(0)} ha)</div></div>
       <div><div style="font-size:1.4rem;font-weight:700;color:#a21caf">${mmPorHaReal!==null?mmPorHaReal.toFixed(1)+" mm/ha":"—"}</div><div style="font-size:.75rem;color:var(--tx2)">mm/ha regados (ponderado por superficie)</div></div>
       <div><div style="font-size:1.4rem;font-weight:700;color:#0d9488">${horasPromedioPorEquipo!==null?horasPromedioPorEquipo.toFixed(1)+" hs":"—"}</div><div style="font-size:.75rem;color:var(--tx2)">Horas de programa promedio por equipo (${cantEquiposConPrograma} equipos)</div></div>
@@ -3556,6 +3600,40 @@ async function fetchStock(){
   }
 }
 
+async function fetchStockRubro(){
+  const tb=document.getElementById("tb-stkr");
+  const syncEl=document.getElementById("stkr-sync");
+  if(!tb)return;
+  try{
+    const r=await fetch(`data/stock_taller_ft.csv?t=${Date.now()}`,{cache:"no-store"});
+    if(!r.ok)throw new Error("status "+r.status);
+    const text=await r.text();
+    const lines=text.trim().split("\n").filter(l=>l.trim());
+    if(lines.length<2)throw new Error("csv vacío");
+    const rows=lines.slice(1).map(l=>{
+      // csv simple: campos sin comas embebidas
+      const c=l.split(",");
+      return{codigo:c[0]||"",producto:c[1]||"",rubro:c[2]||"",cantidad:c[3]||"",unidad:c[4]||"",costo:c[5]||"",actualizado:c[6]||""};
+    });
+    tb.innerHTML=rows.map(r=>`
+      <tr>
+        <td>${r.rubro||"—"}</td>
+        <td>${r.producto}</td>
+        <td>${r.cantidad}</td>
+        <td>${r.unidad}</td>
+        <td>${r.costo?("$"+r.costo):"—"}</td>
+      </tr>`).join("");
+    if(syncEl){
+      const ult=rows[0]?.actualizado;
+      syncEl.textContent=ult?("Finnegans, actualizado: "+new Date(ult).toLocaleString("es-AR")):"Actualizado automático";
+    }
+  }catch(e){
+    console.warn("Stock por rubro:",e);
+    tb.innerHTML=`<tr><td colspan="5" style="text-align:center;color:var(--tx2)">Todavía no está disponible — se está por conectar con Finnegans automáticamente.</td></tr>`;
+    if(syncEl)syncEl.textContent="";
+  }
+}
+
 async function fetchUltimaCargaStock(){
   const el=document.getElementById("stk-sync");
   if(!el)return;
@@ -3701,17 +3779,21 @@ function repsLote(lote){
   return[...repsBomba,...repsGen];
 }
 
-let _shaBG=null;
 async function cargarBGdesdeGitHub(){
   try{
     document.getElementById("bg-sync").textContent="Sincronizando...";
-    const{contenido,sha}=await ghLeer(GH_FILE_BG);
-    _shaBG=sha;
-    if(contenido&&Array.isArray(contenido)){
-      BG_DATA=contenido;
-      bgFilt=[...BG_DATA];
+    const r=await fetch(`${JSONBIN_API}/latest?t=${Date.now()}`,{
+      headers:{"X-Master-Key":JSONBIN_KEY,"Cache-Control":"no-cache, no-store, must-revalidate","Pragma":"no-cache"},cache:"no-store"
+    });
+    if(r.ok){
+      const json=await r.json();
+      const data=json.record;
+      if(Array.isArray(data)&&data.length){
+        BG_DATA=data;
+        bgFilt=[...BG_DATA];
+      }
     }
-    document.getElementById("bg-sync").textContent="✓ Sincronizado (GitHub)";
+    document.getElementById("bg-sync").textContent="✓ Sincronizado (JSONBin)";
     renderBG();
   }catch(e){
     console.warn("BG sync:",e);
@@ -3728,13 +3810,36 @@ function guardarBGenGitHub(idsAfectados,idsEliminados){
 }
 
 async function guardarBGenGitHubInterno(idsAfectados,idsEliminados){
+  // Trae la versión más reciente del bin y solo reemplaza/borra los registros
+  // puntuales que esta acción tocó, para no pisar cambios de otros operarios
+  // que hayan guardado algo mientras este usuario tenía el modal abierto.
   idsAfectados=idsAfectados||[];
   idsEliminados=idsEliminados||[];
-  for(const id of idsEliminados){
-    BG_DATA=BG_DATA.filter(x=>x.id!==id);
+  const rGet=await fetch(`${JSONBIN_API}/latest?t=${Date.now()}_${Math.random()}`,{headers:{"X-Master-Key":JSONBIN_KEY,"Cache-Control":"no-cache, no-store, must-revalidate","Pragma":"no-cache"},cache:"no-store"});
+  if(!rGet.ok)throw new Error("No se pudo leer Bombas/Generadores remoto (status "+rGet.status+"); guardado cancelado para no pisar datos.");
+  const j=await rGet.json();
+  if(!Array.isArray(j.record))throw new Error("Lectura remota de Bombas/Generadores con formato inesperado; guardado cancelado.");
+  let remoto=j.record;
+
+  let fusion=remoto.filter(x=>!idsEliminados.includes(x.id));
+  idsAfectados.forEach(id=>{
+    const local=BG_DATA.find(x=>x.id===id);
+    if(!local)return;
+    const idx=fusion.findIndex(x=>x.id===id);
+    if(idx>=0)fusion[idx]=local; else fusion.push(local);
+  });
+
+  const r=await fetch(JSONBIN_API,{
+    method:"PUT",
+    headers:{"Content-Type":"application/json","X-Master-Key":JSONBIN_KEY},
+    body:JSON.stringify(fusion)
+  });
+  if(!r.ok){
+    const err=await r.text();
+    throw new Error("Error al guardar: "+r.status+" "+err.slice(0,150));
   }
+  BG_DATA=fusion;
   bgFilt=[...BG_DATA];
-  _shaBG=await ghGuardar(GH_FILE_BG,BG_DATA,_shaBG);
   return true;
 }
 
@@ -4143,6 +4248,7 @@ async function refrescarTodo(btn){
   try{
     await Promise.all([
       fetchStock(),
+      fetchStockRubro(),
       fetchGeo(),
       cargarBGdesdeGitHub(),
       fetchReparaciones().then(()=>renderBG()),
@@ -4165,6 +4271,7 @@ async function refrescarTodo(btn){
 pobFil();
 renderKPIs();
 fetchStock();
+fetchStockRubro();
 bGantt();
 cargarEstadosTarea().then(async ()=>{
   await Promise.all([fetchJot(), fetchMSForms()]);
