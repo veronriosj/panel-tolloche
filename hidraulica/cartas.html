@@ -7,28 +7,35 @@
 <link rel="stylesheet" href="css/hidraulica.css">
 <style>
 #print { display: none; }
+.modo { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--grid); }
+.modo p { margin: 0; font-size: .8rem; color: var(--tx2); flex: 1 1 280px; }
+.seg-lg button { padding: 8px 16px; font-size: .86rem; }
+.seg button:disabled { opacity: .45; cursor: not-allowed; }
+.lnk { font: inherit; font-size: inherit; border: 0; background: none; padding: 0; color: var(--vo); text-decoration: underline; cursor: pointer; }
 @media print {
-  @page { size: A4; margin: 11mm 10mm; }
-  body { background: #fff; font-size: 9.5pt; }
+  @page { size: A4; margin: 0; }              /* sin márgenes: el navegador no imprime la dirección ni la fecha */
+  html, body { background: #fff !important; }
   .wrap { display: none !important; }
   #print { display: block; }
-  #print h1 { font-size: 14pt; margin: 0 0 2mm; color: #1a7a4a; }
-  #print h2 { font-size: 9.5pt; margin: 5mm 0 2mm; text-transform: uppercase; letter-spacing: .05em; color: #1a7a4a; break-after: avoid; }
-  #print table { font-size: 8pt; width: 100%; border-collapse: collapse; }
-  #print th, #print td { padding: 1.2mm 1.6mm; border: 0.2mm solid #b9d9c4; }
-  #print th { background: #eafaf0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  #print .dot { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  #print .hdr td { border: 0.3mm solid #1a2415; text-align: left; font-size: 8.5pt; }
-  #print .hdr b { display: block; font-size: 6.5pt; text-transform: uppercase; color: #4a5e42; letter-spacing: .05em; }
-  #print .pg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3mm; align-items: start; break-inside: avoid; margin-bottom: 3mm; }
-  #print .pg + .pg { break-before: page; }
-  #print table.cp { font-size: 7pt; table-layout: auto; }
-  #print table.cp th, #print table.cp td { padding: 0.6mm 1mm; }
-  #print table.cp .dot { width: 7px; height: 7px; margin-right: 2px; }
-  #print .cols table { break-inside: auto; }
-  #print tr { break-inside: avoid; }
-  #print .pb { break-before: page; }
-  #print .foot { margin-top: 4mm; font-size: 7pt; color: #4a5e42; }
+  #print .page { width: 210mm; height: 296mm; padding: 9mm 9mm 8mm; box-sizing: border-box; break-after: page; overflow: hidden; }
+  #print .page:last-child { break-after: auto; }
+  #print .ph { display: grid; grid-template-columns: auto 1fr auto; gap: 5mm; align-items: center; border-bottom: 0.5mm solid #1a7a4a; padding-bottom: 2.5mm; margin-bottom: 3mm; }
+  #print .ph img { height: 13mm; width: auto; }
+  #print .ph h1 { font-size: 13pt; margin: 0; color: #1a2415; }
+  #print .ph .sub { font-size: 8pt; color: #4a5e42; margin-top: 0.8mm; }
+  #print .ph .side { text-align: right; font-size: 9pt; font-weight: 700; color: #1a7a4a; }
+  #print .ph .side small { display: block; font-weight: 400; color: #4a5e42; font-size: 7.5pt; }
+  #print .grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2.2mm; align-items: start; }
+  #print table { width: 100%; border-collapse: collapse; font-size: 7pt; table-layout: fixed; }
+  #print td.cl { overflow: hidden; text-overflow: ellipsis; font-size: 6.3pt; color: #4a5e42; }
+  #print td i { font-style: normal; font-size: 5.6pt; color: #1a7a4a; font-weight: 700; }
+  #print .foot { margin-top: 2mm; font-size: 7pt; color: #4a5e42; }
+  #print th, #print td { padding: 0.28mm 0.7mm; line-height: 1.25; border: 0.2mm solid #c5e1cf; text-align: right; white-space: nowrap; }
+  #print th { background: #eafaf0; color: #1a7a4a; font-size: 6.6pt; text-transform: uppercase; letter-spacing: .03em; }
+  #print td:nth-child(n+3), #print th:nth-child(n+3) { text-align: left; }
+  #print tr.sep td { background: #eafaf0; color: #1a7a4a; font-weight: 700; text-align: left; font-size: 6.8pt; }
+  #print .dot { width: 6px; height: 6px; margin-right: 2px; vertical-align: 0; }
+  #print * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 </style>
 </head>
@@ -40,9 +47,13 @@
   </div>
 
   <section class="card">
+    <div class="modo">
+      <div class="seg seg-lg" id="segM" role="group" aria-label="Criterio de cálculo"><button type="button" data-m="valley" aria-pressed="true">Según carta Valley</button><button type="button" data-m="propia" aria-pressed="false">Según tabla propia</button></div>
+      <p id="modoNote"></p>
+    </div>
     <div class="inputs">
       <div class="field wide"><label for="eq">Equipo</label><select id="eq"></select><span class="hint" id="eqHint"></span></div>
-      <div class="field"><label for="q">Caudal de entrada</label><input type="number" id="q" step="10" min="50"><span class="hint">m³/h · total del equipo</span></div>
+      <div class="field"><label for="q">Caudal de entrada</label><input type="number" id="q" step="10" min="50"><span class="hint">m³/h · total del equipo <button type="button" class="lnk" id="qCarta" hidden></button></span></div>
       <div class="field"><label for="p">Presión de entrada</label><input type="number" id="p" step="0.5" min="1" placeholder="opcional"><span class="hint">psi en el manómetro · vacío = calcula la mínima</span></div>
       <div class="field"><label for="v">Avance al 100 %</label><input type="number" id="v" step="0.01" min="0.5"><span class="hint">m/min</span></div>
     </div>
@@ -98,14 +109,24 @@
   <section class="card">
     <details>
       <summary>Método y supuestos</summary>
+      <p style="margin:0 0 6px;font-size:.8rem;font-weight:700;color:var(--vo)">Según carta Valley</p>
+      <ul class="notes">
+        <li>Cada equipo usa su carta oficial Valley (Irrinoa, 2020): posición de cada salida, modelo (I-Wob, I-Wob UP3 o Super Spray; Directional junto a las torres), tramos, cañerías y drenaje de punta. Equipos con el mismo armado y boquillas: J1-J2-O1-O2, N-P1-P2-P4-P5-R1-R3, Q1-Q2, Q3-Q5-P3 (salvo modelo), L2-L3-M1-M2.</li>
+        <li>Con el caudal de la carta se reproduce exactamente la carta (validado en los 26 equipos: 100 % de las boquillas iguales).</li>
+        <li>Con otro caudal, el caudal de cada salida se escala en la misma proporción y se elige la boquilla más cercana del mismo modelo (tabla de caudales de Valley a 10 psi); después cada tramo se ajusta a ±0,5 %.</li>
+        <li>La presión de la carta es la de diseño de Valley; el panel muestra además la mínima para que regulen todos los bajantes (PSR 10 psi + 0,414 bar).</li>
+      </ul>
+      <p style="margin:12px 0 6px;font-size:.8rem;font-weight:700;color:var(--vo)">Según tabla propia</p>
       <ul class="notes">
         <li>Armado de cada equipo (planilla de equipos + regla de campo): tramos de 8⅝" y 6⅝" con su largo; 3 bajantes por caño a 1,11 · 3,31 · 5,51 m de la brida (2,20 m entre bajantes); primer caño del primer tramo anulado (salida de la T) en ambas alas; bajante anulado junto a cada torre (2 por tramo) y huella seca con 2 aspersores, uno a cada lado de la torre; voladizo con 2 caños de 6⅝" (3 bajantes c/u) y caño de 4" con 5 bajantes, más el drenaje de punta.</li>
-        <li>Caudal requerido por bajante: el caudal de cada lado (proporcional a su largo) se reparte por el largo que cubre cada aspersor, descontando el drenaje de la punta.</li>
-        <li>Boquilla: la de caudal más cercano a 10 psi (tablas oficiales Senninger y Komet KPT, caudal ∝ √P); después cada tramo se ajusta cambiando algunas a medio número / número vecino hasta quedar en ±0,5 %.</li>
-        <li>Presión: fricción Hazen-Williams (C 170; diámetros internos 8,41", 6,42" y 3,79" en la punta del voladizo), caudal decreciente salida por salida y altura del caño tomada del arco de cada tramo (perfil de la carta Valley J1).</li>
-        <li>Regulador: necesita en su entrada (al pie del bajante) su calibración + 0,414 bar (criterio Valley). La presión mínima de entrada es la que cumple eso en el bajante más exigido.</li>
-        <li>Lámina: caudal ÷ (ancho × avance). Avance al 100 %: 4,142 m/min (motor 56 rpm, caja 52:1, rueda 14.9×24, carta J1). Horas por pasada = recorrido ÷ avance.</li>
-        <li>Validación: con la J1 a 980 m³/h reproduce la carta Valley (presión mínima 2,07 bar, 3,28 mm y 26,5 h por pasada al 100 %).</li>
+        <li>Caudal por bajante: el caudal de cada lado (proporcional a su largo) se reparte por el largo que cubre cada aspersor, descontando el drenaje de la punta.</li>
+        <li>Boquilla: la de caudal más cercano a 10 psi (tablas oficiales Senninger y Komet KPT, caudal ∝ √P); después cada tramo se ajusta con medio número / número vecino hasta quedar en ±0,5 %.</li>
+      </ul>
+      <p style="margin:12px 0 6px;font-size:.8rem;font-weight:700;color:var(--vo)">Común a los dos</p>
+      <ul class="notes">
+        <li>Presión: fricción Hazen-Williams (C 170; diámetros internos 8,41", 6,42" y 3,79"), caudal decreciente salida por salida y altura del caño según el arco de cada tramo.</li>
+        <li>Regulador: necesita en su entrada su calibración + 0,414 bar (criterio Valley).</li>
+        <li>Lámina: caudal ÷ (ancho × avance). Avance al 100 %: 4,142 m/min (motor 56 rpm, caja 52:1, rueda 14.9×24). Horas por pasada = recorrido ÷ avance.</li>
       </ul>
     </details>
   </section>
@@ -114,7 +135,9 @@
 
 <script src="js/datos-equipos.js"></script>
 <script src="js/datos-boquillas.js"></script>
+<script src="js/datos-valley.js"></script>
 <script src="js/motor-cartas.js"></script>
+<script src="js/logo-liag.js"></script>
 <script src="js/cartas-ui.js"></script>
 </body>
 </html>

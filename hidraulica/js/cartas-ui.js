@@ -16,13 +16,14 @@
   const chip = (c, t) => `<span class="chip ${c}">${t}</span>`;
   const colorOf = z => COL[z.color] || [z.color || '—', '#ccc'];
   const dot = z => `<i class="dot" style="background:${colorOf(z)[1]}"></i>`;
-  const tipo = t => ({ spray: 'Huella seca (torre)', asp: 'Aspersor', drain: 'Drenaje' })[t];
-  const store = { get(k) { try { return JSON.parse(localStorage.getItem('hidCartas') || '{}')[k]; } catch (e) { return undefined; } },
-    set(k, v) { try { const o = JSON.parse(localStorage.getItem('hidCartas') || '{}'); o[k] = v; localStorage.setItem('hidCartas', JSON.stringify(o)); } catch (e) {} } };
+  const tipo = t => ({ spray: 'Huella seca (torre)', dir: 'Directional (torre)', asp: 'Aspersor', drain: 'Drenaje' })[t];
+  const nom = z => z.modelo ? `${z.label} <span class="muted" style="font-weight:400">${z.modelo}</span>` : z.label;
+  const store = { get(k) { try { return JSON.parse(localStorage.getItem('hidCartas2') || '{}')[k]; } catch (e) { return undefined; } },
+    set(k, v) { try { const o = JSON.parse(localStorage.getItem('hidCartas2') || '{}'); o[k] = v; localStorage.setItem('hidCartas2', JSON.stringify(o)); } catch (e) {} } };
 
-  const st = { id: store.get('id') || 'J1', Q: null, Ppsi: null, v: window.HID_V100, sP: 0, sT: 0, sC: 0, f: 'all', mm: null };
+  const st = { modo: store.get('modo') || 'valley', id: store.get('id') || 'J1', Q: null, Ppsi: null, v: window.HID_V100, sP: 0, sT: 0, sC: 0, f: 'all', mm: null };
   const eq = () => EQ.find(e => e.id === st.id) || EQ[0];
-  const defQ = e => e.id === 'J1' ? 980.2 : Math.round(e.ancho * 0.816 / 10) * 10;  // misma lámina que la J1 (3,3 mm al 100 %)
+  const defQ = e => { const ch = C.valleyChart(e); return ch ? ch.Q : Math.round(e.ancho * 0.816 / 10) * 10; };   // caudal de la carta Valley del equipo
 
   function loadChart(cb) {
     if (window.Chart) return cb();
@@ -41,6 +42,8 @@
     $('v').onchange = ev => { const v = +ev.target.value; if (v > 0) st.v = v; render(); };
     $('mm').oninput = ev => { st.mm = +ev.target.value || null; renderLam(); };
     const seg = (id, key, attr = 's') => document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => { st[key] = attr === 's' ? +b.dataset.s : b.dataset.f; render(); });
+    document.querySelectorAll('#segM button').forEach(b => b.onclick = () => { st.modo = b.dataset.m; store.set('modo', st.modo); render(); });
+    $('qCarta').onclick = () => { const ch = C.valleyChart(eq()); if (ch) { st.Q = ch.Q; store.set('Q_' + st.id, null); $('q').value = st.Q; render(); } };
     seg('segP', 'sP'); seg('segT', 'sT'); seg('segC', 'sC'); seg('segF', 'f', 'f');
     $('btnPrint').onclick = () => { buildPrint(); window.print(); };
     loadChart(render); render();
@@ -49,39 +52,50 @@
   let cur, lam;
   function render() {
     const e = eq(), Pin = st.Ppsi ? st.Ppsi * C.PSI : null;
-    cur = C.carta(e, TAB, { Q: st.Q, Pin, reg: 10 });
+    const vch = C.valleyChart(e);
+    if (!vch) st.modo = 'propia';
+    cur = st.modo === 'valley' ? C.cartaValley(e, TAB, { Q: st.Q, Pin, reg: 10 }) : C.carta(e, TAB, { Q: st.Q, Pin, reg: 10 });
+    document.querySelectorAll('#segM button').forEach(b => { b.setAttribute('aria-pressed', b.dataset.m === st.modo); b.disabled = b.dataset.m === 'valley' && !vch; });
+    $('qCarta').hidden = !vch || st.Q === vch.Q;
+    $('qCarta').textContent = vch ? `Usar caudal de la carta (${fmt(vch.Q, 1)})` : '';
+    $('modoNote').innerHTML = st.modo === 'valley'
+      ? `Armado y boquillas de la <b>carta Valley ${vch.carta}</b> (${vch.fecha}, ${fmt(vch.Q, 1)} m³/h a ${fmt(vch.P, 2)} bar). Con otro caudal se escala cada salida y se elige la boquilla más cercana del mismo modelo.`
+      : `Armado de campo (3 bajantes por caño) y tabla oficial ${e.marca === 'KOMET' ? 'Komet KPT' : 'Senninger'} del aspersor instalado (${e.marca}).`;
     lam = C.lamina(e, st.Q, st.v);
     ['segP', 'segT', 'segC'].forEach((id, i) => document.querySelectorAll(`#${id} button`).forEach(b => b.setAttribute('aria-pressed', +b.dataset.s === [st.sP, st.sT, st.sC][i])));
     document.querySelectorAll('#segF button').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === st.f));
     const nAsp = cur.res.reduce((a, r) => a + r.regs.length, 0);
+    const nDr = cur.res.reduce((a, r) => a + r.outs.filter(o => o.t === 'drain').length, 0);
     $('eqHint').textContent = `${cur.brand.nombre} · ${fmt(e.ancho)} m de ancho · ${fmt(e.recorrido)} m de recorrido · voladizo ${fmt(e.voladizo, 2)} m · ${e.anio}`;
 
     // KPIs
     const ok = cur.ok, P = cur.PinReq;
     $('kpis').innerHTML = [
-      `<div class="k ${st.Ppsi && !ok ? 'bad' : ''}"><div class="l">Presión mínima de entrada</div><div class="v">${fmt(P / C.PSI, 1)}<small>psi</small></div><div class="s">${fmt(P, 2)} bar en el manómetro · PSR 10 psi</div></div>`,
+      `<div class="k ${st.Ppsi && !ok ? 'bad' : ''}"><div class="l">Presión mínima de entrada</div><div class="v">${fmt(P / C.PSI, 1)}<small>psi</small></div><div class="s">${fmt(P, 2)} bar en el manómetro · PSR 10 psi${cur.modo === 'valley' ? ` · carta: ${fmt(cur.chart.P, 2)} bar a ${fmt(cur.chart.Q, 0)} m³/h` : ''}</div></div>`,
       `<div class="k"><div class="l">Lámina al 100 %</div><div class="v">${fmt(lam.mm100, 2)}<small>mm</small></div><div class="s">${fmt(lam.h100, 1)} h por pasada · ${fmt(st.v, 3)} m/min</div></div>`,
       `<div class="k"><div class="l">Caudal por lado</div><div class="v">${fmt(cur.res[0].Qs, 1)}<small>m³/h</small></div><div class="s">lado B ${fmt(cur.res[1].Qs, 1)} m³/h · ${fmt(st.Q / 3.6 / (e.ancho * e.recorrido / 1e4), 3)} L/s por ha</div></div>`,
-      `<div class="k"><div class="l">Aspersores</div><div class="v">${nAsp}<small>+ 2 drenajes</small></div><div class="s">3 por caño (2,20 m) · ${cur.brand.nombre}</div></div>`,
+      `<div class="k"><div class="l">Aspersores</div><div class="v">${nAsp}<small>+ ${nDr} drenajes</small></div><div class="s">${cur.modo === 'valley' ? `${cur.brand.nombre} + Directional en torres` : `3 por caño (2,20 m) · ${cur.brand.nombre}`}</div></div>`,
     ].join('');
     const ch = [];
     if (st.Ppsi) ch.push(ok ? chip('ok', `Con ${fmt(st.Ppsi, 1)} psi regulan todos los bajantes`) : chip('bad', `Con ${fmt(st.Ppsi, 1)} psi no regulan los últimos bajantes: faltan ${fmt((P - Pin) / C.PSI, 1)} psi`));
     else ch.push(chip('', 'Presiones calculadas con la presión mínima de entrada'));
+    if (cur.modo === 'valley') ch.push(cur.cambios === 0 ? chip('ok', `Boquillas iguales a la carta Valley ${cur.chart.carta} (${cur.chart.fecha})`) : chip('warn', `${cur.cambios} de ${nAsp} bajantes cambian de boquilla respecto de la carta (${fmt(cur.chart.Q, 0)} → ${fmt(st.Q, 0)} m³/h)`));
     if (cur.overMax) ch.push(chip('bad', `${cur.overMax} bajantes piden más caudal que la boquilla más grande de la tabla (${cur.tab[cur.tab.length - 1].label})`));
     if (cur.underMin) ch.push(chip('warn', `${cur.underMin} bajantes piden menos que la boquilla más chica`));
     ch.push(chip('ok', `Regulador 10 psi dentro del rango del aspersor (${cur.brand.pmin}–${cur.brand.pmax} psi)`));
+    if (cur.modo === 'valley' && Math.abs(cur.chart.lados[0].fin + (cur.chart.lados[1] || cur.chart.lados[0]).fin - e.ancho) > 3) ch.push(chip('warn', `La carta Valley mide ${fmt(cur.chart.lados[0].fin + (cur.chart.lados[1] || cur.chart.lados[0]).fin, 1)} m; la planilla dice ${fmt(e.ancho)} m (la lámina usa la planilla)`));
     $('chips').innerHTML = ch.join('');
 
     // Boquillas
     const ids = Object.keys(cur.count).sort((a, b) => cur.count[b] - cur.count[a]);
     const byId = id => cur.tab.find(z => z.id === id);
     const side = (i, id) => cur.res[i].count[id] || 0;
-    const drain = cur.res[0].outs.find(o => o.t === 'drain').noz;
+    const drs = {}; cur.res.forEach((r, li) => r.outs.filter(o => o.t === 'drain').forEach(o => { const d = drs[o.noz.id] || (drs[o.noz.id] = { z: o.noz, n: [0, 0], q: 0 }); d.n[li]++; d.q += o.q; }));
     $('nozSub').textContent = 'a 10 psi · por lado y total';
     $('noz').innerHTML = `<thead><tr><th>Boquilla</th><th style="text-align:left">Color</th><th>Lado A</th><th>Lado B</th><th>Total</th><th>m³/h c/u</th></tr></thead><tbody>` +
-      ids.map(id => { const z = byId(id); return `<tr><td><b>${z.label}</b></td><td class="t">${dot(z)}${colorOf(z)[0]}${z.half ? ' · medio nº' : ''}</td><td>${side(0, id)}</td><td>${side(1, id)}</td><td><b>${cur.count[id]}</b></td><td>${fmt(C.qNoz(z, 10), 2)}</td></tr>`; }).join('') +
-      `<tr><td><b>${drain.label}</b></td><td class="t">${dot(drain)}${colorOf(drain)[0]} · drenaje de punta, sin regulador</td><td>1</td><td>1</td><td><b>2</b></td><td>${fmt(cur.res[0].qDrain, 2)}</td></tr>` +
-      `<tr class="sep"><td colspan="2">Total</td><td>${cur.res[0].regs.length + 1}</td><td>${cur.res[1].regs.length + 1}</td><td>${nAsp + 2}</td><td>${fmt(cur.Qact, 1)} m³/h</td></tr></tbody>`;
+      ids.map(id => { const z = byId(id); return `<tr><td><b>${nom(z)}</b></td><td class="t">${dot(z)}${colorOf(z)[0]}</td><td>${side(0, id)}</td><td>${side(1, id)}</td><td><b>${cur.count[id]}</b></td><td>${fmt(C.qNoz(z, 10), 2)}</td></tr>`; }).join('') +
+      Object.values(drs).map(d => `<tr><td><b>${nom(d.z)}</b></td><td class="t">${dot(d.z)}${colorOf(d.z)[0]} · drenaje de punta, sin regulador</td><td>${d.n[0]}</td><td>${d.n[1]}</td><td><b>${d.n[0] + d.n[1]}</b></td><td>${fmt(d.q / (d.n[0] + d.n[1]), 2)}</td></tr>`).join('') +
+      `<tr class="sep"><td colspan="2">Total</td><td>${cur.res[0].outs.length}</td><td>${cur.res[1].outs.length}</td><td>${nAsp + nDr}</td><td>${fmt(cur.Qact, 1)} m³/h</td></tr></tbody>`;
 
     renderLam(); renderReg(); renderTramos(); drawChart(); renderFull();
   }
@@ -98,7 +112,7 @@
 
   function renderReg() {
     const Pin = st.Ppsi ? st.Ppsi * C.PSI : null;
-    const s = C.regulatorStudy(eq(), TAB, st.Q, Pin);
+    const s = cur.modo === 'valley' ? C.regulatorStudyValley(eq(), TAB, st.Q, Pin) : C.regulatorStudy(eq(), TAB, st.Q, Pin);
     $('reg').innerHTML = `<thead><tr><th>PSR</th><th>Entrada mín.</th><th>Boquillas</th><th style="text-align:left">Con tu presión</th></tr></thead><tbody>` +
       s.map(r => `<tr class="${r.reg === 10 ? 'sel' : ''}"><td>${r.reg} psi${r.reg === 10 ? ' <span class="muted">(instalado)</span>' : ''}</td><td>${fmt(r.PinReq / C.PSI, 1)} psi<br><span class="muted">${fmt(r.PinReq, 2)} bar</span></td><td>${r.nMin.label} a ${r.nMax.label}</td><td class="t">${!r.inRange ? chip('warn', 'fuera de rango') : Pin == null ? '<span class="muted">—</span>' : r.ok ? chip('ok', 'alcanza') : chip('bad', 'no alcanza')}</td></tr>`).join('') + '</tbody>';
     const b = cur.brand;
@@ -109,7 +123,7 @@
     const r = cur.res[st.sT];
     $('tramos').innerHTML = `<thead><tr><th>Tramo</th><th>Caño</th><th>Largo m</th><th>Bajantes</th><th style="text-align:left">Boquillas</th><th>Q req. m³/h</th><th>Q real m³/h</th><th>Desvío</th><th>Línea al final bar</th></tr></thead><tbody>` +
       r.spans.map((s, si) => {
-        const mix = Object.entries(s.cnt).sort((a, b) => b[1] - a[1]).map(([id, k]) => { const z = cur.tab.find(t => t.id === id); return `<span style="white-space:nowrap">${k}× ${dot(z)}${z.label}</span>`; }).join(' · ');
+        const mix = Object.entries(s.cnt).sort((a, b) => b[1] - a[1]).map(([id, k]) => { const z = cur.tab.find(t => t.id === id); return `<span style="white-space:nowrap">${k}× ${dot(z)}${nom(z)}</span>`; }).join(' · ');
         const last = r.outs.filter(o => o.span === si).pop();
         return `<tr><td>${s.n === 'OH' ? 'Voladizo' : s.n}</td><td>${s.d === 'OH' ? '6⅝" + 4"' : s.d === '8' ? '8⅝"' : '6⅝"'}</td><td>${fmt(s.L, 2)}</td><td>${s.k}</td><td class="t">${mix}</td><td>${fmt(s.rq, 2)}</td><td>${fmt(s.act, 2)}</td><td>${s.dev >= 0 ? '+' : ''}${fmt(s.dev * 100, 2)} %</td><td>${fmt(last.line, 2)}</td></tr>`;
       }).join('') + '</tbody>';
@@ -139,43 +153,41 @@
     for (const o of r.outs) {
       if (o.span !== si) { si = o.span; const s = r.spans[si]; h += `<tr class="sep"><td colspan="7">${s.n === 'OH' ? 'Voladizo' : 'Tramo ' + s.n} · ${s.d === 'OH' ? '' : s.d === '8' ? '8⅝" · ' : '6⅝" · '}hasta ${fmt(s.end, 2)} m</td></tr>`; }
       if (filter === 'diff' && o.t !== 'drain' && o.noz.id === mode) continue;
-      h += `<tr class="${o.t !== 'drain' && o.margin < 0 ? 'flag' : ''}"><td>${o.c}</td><td>${fmt(o.x, 2)}</td><td class="t">${tipo(o.t)}</td><td>${dot(o.noz)}<b>${o.noz.label}</b></td><td>${o.drop ? fmt(o.drop) : '—'}</td><td>${fmt(o.line, 2)}</td><td>${fmt(o.q, 2)}</td></tr>`;
+      h += `<tr class="${o.t !== 'drain' && o.margin < 0 ? 'flag' : ''}"><td>${o.c}</td><td>${fmt(o.x, 2)}</td><td class="t">${tipo(o.t)}</td><td>${dot(o.noz)}<b>${nom(o.noz)}</b></td><td>${o.drop ? fmt(o.drop) : '—'}</td><td>${fmt(o.line, 2)}</td><td>${fmt(o.q, 2)}</td></tr>`;
     }
     return `<thead><tr><th>Nº</th><th>Dist. m</th><th style="text-align:left">Tipo</th><th>Boquilla</th><th>Bajante cm</th><th>Línea bar</th><th>Q m³/h</th></tr></thead><tbody>${h}</tbody>`;
   }
-  function printRows(r) {   // carta compacta para A4: tablas de 56 filas, 3 por hoja
-    const rows = []; let si = -1;
-    for (const o of r.outs) {
-      if (o.span !== si) { si = o.span; const s = r.spans[si]; rows.push(`<tr class="sep"><td colspan="5">${s.n === 'OH' ? 'Voladizo' : 'Tramo ' + s.n + (s.d === '8' ? ' · 8⅝"' : ' · 6⅝"')} · hasta ${fmt(s.end, 1)} m</td></tr>`); }
-      rows.push(`<tr><td>${o.c}</td><td>${fmt(o.x, 1)}</td><td>${dot(o.noz)}<b>${o.noz.label}</b>${o.t === 'spray' ? ' H' : o.t === 'drain' ? ' D' : ''}</td><td>${fmt(o.line, 2)}</td><td>${fmt(o.q, 2)}</td></tr>`);
-    }
-    const head = '<thead><tr><th>Nº</th><th>m</th><th>Boquilla</th><th>bar</th><th>m³/h</th></tr></thead>';
-    const N = 52, tables = [];
-    for (let i = 0; i < rows.length; i += N) tables.push(`<table class="cp">${head}<tbody>${rows.slice(i, i + N).join('')}</tbody></table>`);
-    let html = '';
-    for (let i = 0; i < tables.length; i += 3) html += `<div class="pg">${tables.slice(i, i + 3).join('')}</div>`;
-    return html;
-  }
   function renderFull() { $('full').innerHTML = fullRows(cur.res[st.sC], st.f); }
 
+  // Carta impresa: solo boquilla por bajante, con logo LIAG. Un lado por hoja (5 columnas).
   function buildPrint() {
     const e = eq(), hoy = new Date().toLocaleDateString('es-AR');
-    const noz = $('noz').outerHTML, tram = i => { const keep = st.sT; st.sT = i; renderTramos(); const h = $('tramos').outerHTML; st.sT = keep; renderTramos(); return h; };
-    $('print').innerHTML = `
-      <h1>Carta de aspersión · Equipo ${e.id}</h1>
-      <table class="hdr"><tr>
-        <td><b>Establecimiento</b>Finca Tolloche</td><td><b>Equipo</b>${e.id} · lineal centerfeed · ${e.tramos} tramos</td><td><b>Aspersor</b>${cur.brand.nombre}</td><td><b>Regulador</b>PSR 10 psi (0,69 bar)</td><td><b>Fecha</b>${hoy}</td>
-      </tr><tr>
-        <td><b>Caudal de entrada</b>${fmt(st.Q, 1)} m³/h</td><td><b>Presión mínima de entrada</b>${fmt(cur.PinReq / C.PSI, 1)} psi · ${fmt(cur.PinReq, 2)} bar</td><td><b>Ancho / recorrido</b>${fmt(e.ancho)} m / ${fmt(e.recorrido)} m</td><td><b>Bajantes</b>3 por caño · 2,20 m</td><td><b>Lámina 100 %</b>${fmt(lam.mm100, 2)} mm · ${fmt(lam.h100, 1)} h</td>
-      </tr></table>
-      ${st.Ppsi ? `<p>Presión de entrada informada: ${fmt(st.Ppsi, 1)} psi — ${cur.ok ? 'regulan todos los bajantes' : 'NO alcanza para regular todos los bajantes'}.</p>` : ''}
-      <h2>Boquillas a colocar</h2>${noz}
-      <h2>Lámina según % de avance</h2>${$('lam').outerHTML}
-      <h2>Resumen por tramo · Lado A</h2>${tram(0)}
-      <h2>Resumen por tramo · Lado B</h2>${tram(1)}
-      <h2 class="pb">Carta completa · Lado A <span style="font-weight:400;text-transform:none">(H = huella seca de torre · D = drenaje)</span></h2>${printRows(cur.res[0])}
-      <h2 class="pb">Carta completa · Lado B</h2>${printRows(cur.res[1])}
-      <p class="foot">Cálculo: Panel Tolloche · Cálculos hidráulicos. Tablas Senninger / Komet KPT a 10 psi; fricción Hazen-Williams C 170; perfil de tramos según carta Valley J1. Verificar en campo la presión de entrada y el caudal.</p>`;
+    const crit = st.modo === 'valley' ? 'Según carta Valley' : 'Según tabla propia';
+    const info = `Caudal ${fmt(st.Q, 1)} m³/h · Presión mín. de entrada ${fmt(cur.PinReq / C.PSI, 1)} psi (${fmt(cur.PinReq, 2)} bar) · Regulador 10 psi · ${cur.brand.nombre} · ${crit}${cur.modo === 'valley' ? ` (${cur.chart.carta}, ${cur.chart.fecha})` : ''}`;
+    const ley = cur.modo === 'valley' ? 'Dir = Directional en torre · Dren = drenaje de punta sin regulador' : 'H = huella seca en torre · Dren = drenaje de punta sin regulador';
+    const MAXR = 58, COLS = 5;
+    let pages = '';
+    const ab = { spray: 'H', dir: 'Dir', drain: 'Dren' };
+    cur.res.forEach((r, li) => {
+      const rows = []; let si = -1;
+      for (const o of r.outs) {
+        if (o.span !== si) { si = o.span; const s = r.spans[si]; rows.push(`<tr class="sep"><td colspan="4">${s.n === 'OH' ? 'Voladizo' : 'Tramo ' + s.n}</td></tr>`); }
+        const z = o.noz;
+        rows.push(`<tr><td>${o.c}</td><td>${fmt(o.x, 1)}</td><td><b>${z.label}</b>${ab[o.t] ? ` <i>${ab[o.t]}</i>` : ''}</td><td class="cl">${dot(z)}${colorOf(z)[0]}</td></tr>`);
+      }
+      const nPag = Math.ceil(rows.length / (MAXR * COLS));
+      for (let pg = 0; pg < nPag; pg++) {
+        const pr = rows.slice(pg * MAXR * COLS, (pg + 1) * MAXR * COLS), per = Math.ceil(pr.length / COLS);
+        let cols = '';
+        for (let c = 0; c < COLS; c++) {
+          const chunk = pr.slice(c * per, (c + 1) * per);
+          cols += chunk.length ? `<table><colgroup><col style="width:16%"><col style="width:22%"><col style="width:29%"><col style="width:33%"></colgroup><thead><tr><th>Nº</th><th>m</th><th>Boq.</th><th>Color</th></tr></thead><tbody>${chunk.join('')}</tbody></table>` : '<div></div>';
+        }
+        pages += `<section class="page"><div class="ph">${window.HID_LOGO ? `<img src="${window.HID_LOGO}" alt="LIAG Argentina S.A.U.">` : ''}<div><h1>Carta de aspersión · Equipo ${e.id}</h1><div class="sub">${info}</div></div>
+          <div class="side">Lado ${li === 0 ? 'A' : 'B'}<small>hoja ${pg + 1} de ${nPag} · ${hoy}</small></div></div><div class="grid">${cols}</div><div class="foot">${ley}</div></section>`;
+      }
+    });
+    $('print').innerHTML = pages;
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

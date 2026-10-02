@@ -172,7 +172,140 @@
     return { mm100, h100, rows: [100, 90, 80, 70, 60, 50, 45, 40, 35, 30, 25, 20, 15, 10, 5].map(p => ({ p, mm: mm100 * 100 / p, h: h100 * 100 / p })) };
   }
 
-  const api = { PSI, REG_MARGIN, BRANDS, buildSide, calcSide, carta, regulatorStudy, lamina, qNoz };
+  // ===================== Modo "según carta Valley" =====================
+  // Usa el armado de la carta oficial (posición y modelo de cada salida) y la tabla de caudales de Valley.
+  // Con el caudal de la carta reproduce sus boquillas; con otro caudal escala el caudal de cada salida y
+  // elige la boquilla más cercana del mismo modelo, ajustando cada tramo a ±0,5 %.
+  const VMODELS = {
+    IW: { nombre: 'Senninger I-Wob', pmin: 6, pmax: 15, rec: 10, r: n => n <= 18 ? 1.022 : 1.022 - 0.0155 * (n - 18) },
+    UP3: { nombre: 'Senninger I-Wob UP3', pmin: 6, pmax: 15, rec: 10, r: n => 1.061 * (n <= 18 ? 1.022 : 1.022 - 0.0155 * (n - 18)) },
+    SS: { nombre: 'Senninger Super Spray', pmin: 6, pmax: 40, rec: 10, r: n => 1.008 - 0.0127 * (n - 18.5) },
+    D: { nombre: 'Senninger Directional', pmin: 6, pmax: 40, rec: 10, r: () => 1.01 },
+  };
+  const VCORTO = { IW: 'I-Wob', UP3: 'I-Wob UP3', SS: 'Super Spray', D: 'Directional' };
+  const vTabCache = {};
+  function vTab(TABLAS, m) {               // tabla de un modelo: nº 11 a 26 cada medio número, L/h a 10 psi
+    if (vTabCache[m]) return vTabCache[m];
+    const t = TABLAS.senninger.filter(z => z.d128 >= 22 && z.d128 <= 52).map(z => {
+      const n = z.d128 / 2;
+      return { id: m + n, label: '#' + String(n).replace('.', ','), n, d128: z.d128, color: z.color, half: z.half, modelo: VCORTO[m], m, q10: Math.round(z.q10 * VMODELS[m].r(n)) };
+    });
+    return (vTabCache[m] = t);
+  }
+  const archOf = (s, x) => lin(ARCH[s.d], Math.min(1, Math.max(0, (x - s.start) / s.L)));
+
+  function valleyChart(eq) {
+    const V = root.HID_VALLEY || {}, map = root.HID_VALLEY_MAP || {};
+    return V[eq.id] || V[map[eq.id]] || null;
+  }
+
+  function cartaValley(eq, TABLAS, { Q, Pin = null, reg = 10, tol = 0.005 }) {
+    const ch = valleyChart(eq); if (!ch) return null;
+    const k = Q / ch.Q, regBar = reg * PSI;
+    const tabs = { main: vTab(TABLAS, ch.main), D: vTab(TABLAS, 'D') };
+    const tab = [...tabs.main, ...tabs.D];
+    const lados = [ch.lados[0], ch.lados[1] || ch.lados[0]];
+    // armado de cada lado
+    const sides = lados.map(ld => {
+      const spans = []; let a = 0, acc = 0;
+      const pipeD = x => { let s = 0; for (const p of ld.pipes) { s += p[0]; if (x <= s + 1e-6) return p[1]; } return ld.pipes[ld.pipes.length - 1][1]; };
+      [...ld.torres, ld.fin].forEach((b, i) => {
+        const oh = i === ld.torres.length, mid = (a + b) / 2, D = pipeD(mid);
+        spans.push({ n: oh ? 'OH' : String(i + 1), d: oh ? 'OH' : D > 7 ? '8' : '6', L: b - a, start: a, end: b }); a = b;
+      });
+      const spanOf = x => { const i = spans.findIndex(s => x <= s.end + 1e-6); return i < 0 ? spans.length - 1 : i; };
+      const outs = ld.o.map(([x, t, n], i) => {
+        const si = spanOf(x), m = t === '/' ? 'main' : 'D', z0 = tabs[m].find(z => z.n === n) || tabs[m][tabs[m].length - 1];
+        return { c: i + 1, x, t: t === '/' ? 'asp' : t === 'D' ? 'dir' : 'drain', m, span: si, n0: n, z0, drop: t === 'X' ? null : Math.round(archOf(spans[si], x)) };
+      });
+      return { spans, outlets: outs, pipes: ld.pipes.map(p => ({ L: p[0], id_in: p[1], C: p[2] })), L: ld.fin };
+    });
+
+    function calc(side, P) {
+      const outs = side.outlets.map(o => ({ ...o })), spans = side.spans;
+      const regs = outs.filter(o => o.t !== 'drain'), drains = outs.filter(o => o.t === 'drain');
+      const qAt = z => qNoz(z, reg);
+      // caudal objetivo de cada salida: el de la carta escalado
+      regs.forEach(o => {
+        o.rq = qNoz(o.z0, 10) * k;
+        const T = tabs[o.m]; let bi = 0, e = Infinity;
+        T.forEach((z, i) => { const d = Math.abs(qAt(z) - o.rq); if (d < e - 1e-12) { e = d; bi = i; } });
+        o.i = bi; o.T = T;
+      });
+      if (Math.abs(k - 1) > 1e-9 || reg !== 10) spans.forEach((s, si) => {
+        const g = regs.filter(o => o.span === si); if (!g.length) return;
+        const rq = g.reduce((a, o) => a + o.rq, 0);
+        for (let it = 0; it < g.length; it++) {
+          const act = g.reduce((a, o) => a + qAt(o.T[o.i]), 0), dev = (act - rq) / rq;
+          if (Math.abs(dev) <= tol) break;
+          const dir = dev < 0 ? 1 : -1; let cand = null, gain = 0;
+          for (const o of g) {
+            const j = o.i + dir; if (j < 0 || j >= o.T.length) continue;
+            const gg = Math.abs(act - rq) - Math.abs(act - qAt(o.T[o.i]) + qAt(o.T[j]) - rq);
+            if (gg > gain + 1e-9) { gain = gg; cand = o; }
+          }
+          if (!cand) break;
+          cand.i += dir;
+        }
+      });
+      let lastDrop = regs[0].drop; outs.forEach(o => { if (o.drop) lastDrop = o.drop; o.z = lastDrop / 100; });
+      const z0 = outs[0].z;
+      let Pf = P, x = GAUGE, minMargin = Infinity, worst = null;
+      const drainQ = o => qNoz(o.z0, Math.max(0, o.line) / PSI);
+      // caudal de paso: suma de lo que sale aguas abajo (iterado una vez para el drenaje)
+      regs.forEach(o => { o.noz = o.T[o.i]; o.q = qAt(o.noz); });
+      drains.forEach(o => { o.noz = o.z0; o.q = qNoz(o.z0, 10); });
+      for (let pass = 0; pass < 3; pass++) {
+        let Qp = outs.reduce((a, o) => a + o.q, 0); Pf = P; x = GAUGE; minMargin = Infinity; worst = null;
+        for (const o of outs) {
+          Pf -= hw(o.x - x, Qp, pipeAt(side.pipes, (x + o.x) / 2)); x = o.x;
+          o.line = Pf - (o.z - z0) * BAR_M;
+          if (o.t === 'drain') o.q = drainQ(o);
+          else {
+            o.pin = o.line + o.z * BAR_M; o.margin = o.pin - (regBar + REG_MARGIN);
+            o.psp = o.margin >= 0 ? regBar : Math.max(0, Math.min(regBar, o.pin - 3 * PSI));
+            o.q = qNoz(o.noz, o.psp / PSI);
+            if (o.margin < minMargin) { minMargin = o.margin; worst = o; }
+          }
+          Qp -= o.q;
+        }
+      }
+      const res = { outs, regs, Qs: outs.reduce((a, o) => a + o.q, 0), qDrain: drains.reduce((a, o) => a + o.q, 0), Pend: outs[outs.length - 1].line, minMargin, worst, drains };
+      res.spans = spans.map((s, si) => {
+        const g = regs.filter(o => o.span === si), cnt = {};
+        g.forEach(o => cnt[o.noz.id] = (cnt[o.noz.id] || 0) + 1);
+        const rq = g.reduce((a, o) => a + o.rq, 0), act = g.reduce((a, o) => a + o.q, 0);
+        return { ...s, rq, act, dev: rq ? (act - rq) / rq : 0, cnt, k: g.length };
+      });
+      res.overMax = regs.filter(o => o.i === o.T.length - 1 && o.rq > qAt(o.noz) * 1.02).length;
+      res.underMin = regs.filter(o => o.i === 0 && o.rq < qAt(o.noz) * 0.98).length;
+      res.count = {}; regs.forEach(o => res.count[o.noz.id] = (res.count[o.noz.id] || 0) + 1);
+      res.cambios = regs.filter(o => o.noz.n !== o.n0).length;
+      res.Qact = regs.reduce((a, o) => a + o.q, 0) + res.qDrain;
+      res.PinReq = P - minMargin;
+      return res;
+    }
+    let r = sides.map(sd => calc(sd, 6));
+    const PinReq = Math.max(...r.map(x => x.PinReq));
+    const Puse = Pin == null ? PinReq : Pin;
+    r = sides.map(sd => calc(sd, Puse));
+    const count = {}; r.forEach(x => Object.entries(x.count).forEach(([id, v]) => count[id] = (count[id] || 0) + v));
+    const b = VMODELS[ch.main];
+    return { eq, modo: 'valley', chart: ch, k, brand: { nombre: b.nombre, pmin: b.pmin, pmax: b.pmax, rec: b.rec }, tab, sides, res: r, PinReq, Pin: Puse,
+      ok: Math.min(...r.map(x => x.minMargin)) >= -1e-9, count, Qact: r.reduce((a, x) => a + x.Qact, 0), reg,
+      overMax: r.reduce((a, x) => a + x.overMax, 0), underMin: r.reduce((a, x) => a + x.underMin, 0), cambios: r.reduce((a, x) => a + x.cambios, 0) };
+  }
+
+  function regulatorStudyValley(eq, TABLAS, Q, Pin) {
+    return [6, 10, 15, 20].map(reg => {
+      const c = cartaValley(eq, TABLAS, { Q, Pin, reg });
+      const ns = c.res.flatMap(r => r.regs.filter(o => o.m === 'main').map(o => o.noz));
+      ns.sort((a, b) => a.n - b.n);
+      return { reg, PinReq: c.PinReq, ok: Pin == null ? true : Pin >= c.PinReq - 1e-9, inRange: reg >= c.brand.pmin && reg <= c.brand.pmax, nMin: ns[0], nMax: ns[ns.length - 1] };
+    });
+  }
+
+  const api = { PSI, REG_MARGIN, BRANDS, VMODELS, buildSide, calcSide, carta, cartaValley, valleyChart, regulatorStudy, regulatorStudyValley, lamina, qNoz };
   root.HIDcartas = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
