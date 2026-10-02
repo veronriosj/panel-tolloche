@@ -3,6 +3,7 @@
 // Cada herramienta vive en su propia página (hidraulica/*.html) dentro de un iframe,
 // así no comparte estilos ni variables con el resto del panel.
 (function () {
+  const SELF = (document.currentScript && document.currentScript.src) || '';
   const TABS = [
     { id: 't-hbomba', label: 'Selección de bomba', src: 'hidraulica/bombas.html' },
     { id: 't-hcartas', label: 'Cartas de aspersión', src: 'hidraulica/cartas.html' },
@@ -66,6 +67,12 @@
         window.showTab(last, btn);
       }
     } catch (e) {}
+
+    // Menú lateral desplegable (se carga después de agregar este grupo)
+    const base = SELF;
+    const m = document.createElement('script');
+    m.src = (base ? base.replace(/hidraulica\.js(\?.*)?$/, '') : 'hidraulica/') + 'panel-menu.js';
+    document.head.appendChild(m);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', montar); else montar();

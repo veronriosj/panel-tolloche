@@ -93,7 +93,7 @@
     const drs = {}; cur.res.forEach((r, li) => r.outs.filter(o => o.t === 'drain').forEach(o => { const d = drs[o.noz.id] || (drs[o.noz.id] = { z: o.noz, n: [0, 0], q: 0 }); d.n[li]++; d.q += o.q; }));
     $('nozSub').textContent = 'a 10 psi · por lado y total';
     $('noz').innerHTML = `<thead><tr><th>Boquilla</th><th style="text-align:left">Color</th><th>Lado A</th><th>Lado B</th><th>Total</th><th>m³/h c/u</th></tr></thead><tbody>` +
-      ids.map(id => { const z = byId(id); return `<tr><td><b>${nom(z)}</b></td><td class="t">${dot(z)}${colorOf(z)[0]}</td><td>${side(0, id)}</td><td>${side(1, id)}</td><td><b>${cur.count[id]}</b></td><td>${fmt(C.qNoz(z, 10), 2)}</td></tr>`; }).join('') +
+      ids.map(id => { const z = byId(id); return `<tr><td><b>${nom(z)}</b></td><td class="t" style="white-space:nowrap">${dot(z)}${colorOf(z)[0]}</td><td>${side(0, id)}</td><td>${side(1, id)}</td><td><b>${cur.count[id]}</b></td><td>${fmt(C.qNoz(z, 10), 2)}</td></tr>`; }).join('') +
       Object.values(drs).map(d => `<tr><td><b>${nom(d.z)}</b></td><td class="t">${dot(d.z)}${colorOf(d.z)[0]} · drenaje de punta, sin regulador</td><td>${d.n[0]}</td><td>${d.n[1]}</td><td><b>${d.n[0] + d.n[1]}</b></td><td>${fmt(d.q / (d.n[0] + d.n[1]), 2)}</td></tr>`).join('') +
       `<tr class="sep"><td colspan="2">Total</td><td>${cur.res[0].outs.length}</td><td>${cur.res[1].outs.length}</td><td>${nAsp + nDr}</td><td>${fmt(cur.Qact, 1)} m³/h</td></tr></tbody>`;
 
