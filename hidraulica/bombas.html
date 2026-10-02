@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Selección de bomba · Panel Tolloche</title>
+<style>
+/* Layout: hoja técnica — rótulo tipo plano arriba, controles, resumen, gráficos, tablas, supuestos */
+:root {
+  --bg: #e8f7ec; --panel: #ffffff; --ink: #1a2415; --ink-2: #4a5e42; --ink-3: #7a8a72;
+  --rule: #c5e8d0; --grid: #e3efe6; --soft: #eafaf0;
+  --accent: #1a7a4a; --accent-soft: rgba(46,168,101,.12); --sys: #e8931a;
+  --good: #1f9d55; --warn: #e8931a; --bad: #d93025;
+  --f-display: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --f-body: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --f-mono: "Cascadia Mono", Consolas, ui-monospace, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+.nc { text-transform: none; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.45; }
+.wrap { max-width: 1280px; margin: 0 auto; padding-inline: 20px; padding-block: 20px 48px; display: grid; gap: 18px; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 600; text-wrap: balance; margin: 0; }
+h2 { font-size: 15px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--ink-3); }
+.card { background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 16px; min-width: 0; }
+.sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.sec-head p { margin: 0; color: var(--ink-3); font-size: 12.5px; }
+
+/* Rótulo */
+.titleblock { display: grid; grid-template-columns: 2.2fr repeat(4, 1fr); border: 1.5px solid var(--accent); border-radius: 10px; overflow: hidden; background: var(--panel); }
+.titleblock > div { padding: 10px 12px; border-left: 1px solid var(--rule); min-width: 0; }
+.titleblock > div:first-child { border-left: 0; }
+.tb-label { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); display: block; margin-bottom: 2px; }
+.titleblock h1 { font-size: 22px; line-height: 1.15; }
+.tb-val { font-size: 13px; font-weight: 500; }
+@media (max-width: 900px) { .titleblock { grid-template-columns: 1fr 1fr; }
+  .titleblock > div { border-left: 0; border-top: 1px solid var(--rule); }
+  .titleblock > div:first-child { grid-column: 1 / -1; border-top: 0; }
+  .titleblock > div:nth-child(odd):not(:first-child) { border-left: 1px solid var(--rule); } }
+
+/* Controles */
+.controls { display: grid; grid-template-columns: 1.4fr 2fr 1.3fr .8fr .8fr; gap: 14px; align-items: end; }
+.field { display: grid; gap: 5px; min-width: 0; }
+.field label { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-2); font-weight: 500; }
+select, input[type=number] { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; padding: 7px 8px; width: 100%; min-width: 0; }
+input[type=number] { font-family: var(--f-mono); }
+select:focus-visible, input:focus-visible, button:focus-visible, summary:focus-visible, tr:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rpm-row { display: flex; align-items: center; gap: 10px; }
+.rpm-row input[type=range] { flex: 1; accent-color: var(--accent); min-width: 0; }
+.rpm-row input[type=number] { width: 92px; flex: none; }
+.hint { font-size: 11.5px; color: var(--ink-3); }
+@media (max-width: 1000px) { .controls { grid-template-columns: 1fr 1fr; } .controls .rpm { grid-column: 1 / -1; order: -1; } }
+@media (max-width: 520px) { .controls { grid-template-columns: 1fr; } }
+
+details.sys { margin-top: 14px; border-top: 1px solid var(--grid); padding-top: 12px; }
+details.sys summary { cursor: pointer; font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.sys-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+@media (max-width: 900px) { .sys-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.formula { margin-top: 10px; font-family: var(--f-mono); font-size: 12px; color: var(--ink-2); background: var(--soft); padding: 8px 10px; border-radius: 3px; overflow-x: auto; white-space: nowrap; }
+button.reset { font: inherit; font-size: 12px; background: none; border: 1px solid var(--rule); color: var(--ink-2); border-radius: 3px; padding: 5px 10px; cursor: pointer; }
+
+/* Resumen */
+.summary { display: grid; grid-template-columns: 1.35fr 1fr 1fr; gap: 18px; }
+@media (max-width: 1050px) { .summary { grid-template-columns: 1fr; } }
+.kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--grid); }
+.kpi { padding: 10px 10px 10px 0; border-bottom: 1px solid var(--grid); min-width: 0; }
+.kpi .k { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.kpi .v { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 500; line-height: 1.2; }
+.kpi .u { font-size: 12px; color: var(--ink-3); margin-left: 3px; font-family: var(--f-body); }
+.kpi .s { font-size: 11.5px; color: var(--ink-3); }
+@media (max-width: 520px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.opt dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+.opt dt { color: var(--ink-3); font-size: 12.5px; }
+.opt dd { margin: 0; text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.opt .big { font-family: var(--f-mono); font-size: 30px; font-weight: 500; line-height: 1.1; }
+.opt .big small { font-size: 13px; color: var(--ink-3); font-family: var(--f-body); margin-left: 4px; }
+.opt button { margin-top: 12px; font: inherit; font-size: 12.5px; font-weight: 500; color: var(--accent); background: var(--accent-soft); border: 1px solid transparent; border-radius: 3px; padding: 6px 10px; cursor: pointer; }
+.opt .chips { margin: 8px 0 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+
+.chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 500; padding: 2px 8px 2px 6px; border-radius: 10px; border: 1px solid var(--rule); color: var(--ink-2); white-space: nowrap; }
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); flex: none; }
+.chip.good::before { background: var(--good); } .chip.warn::before { background: var(--warn); } .chip.bad::before { background: var(--bad); }
+.chip.good { border-color: color-mix(in srgb, var(--good) 45%, var(--rule)); }
+.chip.warn { border-color: color-mix(in srgb, var(--warn) 55%, var(--rule)); }
+.chip.bad { border-color: color-mix(in srgb, var(--bad) 55%, var(--rule)); }
+
+/* Gráficos */
+.charts { display: grid; grid-template-columns: 1.6fr 1fr; gap: 18px; }
+@media (max-width: 1050px) { .charts { grid-template-columns: 1fr; } }
+.chart-main { position: relative; height: 520px; }
+.side { display: grid; gap: 10px; }
+.mini h3 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 4px; font-family: var(--f-body); }
+.mini .box { position: relative; height: 150px; }
+.mini .empty { height: 150px; display: grid; place-items: center; color: var(--ink-3); font-size: 12.5px; border: 1px dashed var(--rule); border-radius: 3px; text-align: center; padding: 10px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--ink-2); margin-top: 10px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 0; border-top: 2.5px solid; display: inline-block; }
+.sw.dash { border-top-style: dashed; border-top-width: 1.5px; }
+.sw.dot { width: 10px; height: 10px; border-radius: 50%; border: 0; }
+
+/* Tablas */
+.tbl-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; border-bottom: 1px solid var(--rule); vertical-align: bottom; }
+th:first-child, td:first-child { text-align: left; }
+td { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+td.txt { font-family: var(--f-body); }
+td.txt b { font-weight: 600; }
+tr.cur td { background: var(--accent-soft); }
+tr.tgt td { box-shadow: inset 0 -1.5px 0 var(--ink-2); }
+tr.tgt td:first-child::after { content: " ← Q objetivo"; font-family: var(--f-body); color: var(--ink-3); font-size: 11.5px; }
+#cmp tbody tr { cursor: pointer; }
+#cmp tbody tr:hover td { background: var(--soft); }
+#cmp tbody tr.sel td { background: var(--accent-soft); }
+td .sub { display: block; font-size: 11px; color: var(--ink-3); font-weight: 400; }
+
+.notes { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; font-size: 13px; color: var(--ink-2); }
+.notes ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.notes h3 { font-size: 13.5px; margin-bottom: 8px; color: var(--ink); }
+@media (max-width: 800px) { .notes { grid-template-columns: 1fr; } }
+footer { font-size: 11.5px; color: var(--ink-3); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>window.Chart||document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"><\/script>')</script>
+</head>
+<body>
+<div class="wrap">
+
+<header class="titleblock">
+  <div><span class="tb-label">Finca Tolloche · Cálculos hidráulicos</span><h1>Selección de bomba centrífuga para equipo de riego</h1></div>
+  <div><span class="tb-label">Accionamiento</span><span class="tb-val">Scania DC13 · 450 hp<br>Acople directo</span></div>
+  <div><span class="tb-label">Requerimiento</span><span class="tb-val">2 alas × 510 m³/h<br>Q diseño <span class="num" id="tbQ">1100</span> m³/h</span></div>
+  <div><span class="tb-label">Sistema</span><span class="tb-val">Curva “Nueva-usada”<br>H<sub>est</sub> <span class="num" id="tbH">8</span> m</span></div>
+  <div><span class="tb-label">Revisión</span><span class="tb-val">Rev. A<br><span class="num">01/10/2026</span></span></div>
+</header>
+
+<section class="card" aria-label="Parámetros">
+  <div class="controls">
+    <div class="field"><label for="pump">Bomba</label><select id="pump"></select><span class="hint" id="pumpDetail"></span></div>
+    <div class="field rpm"><label for="rpmR">Velocidad motor = velocidad bomba (rpm)</label>
+      <div class="rpm-row"><input type="range" id="rpmR" min="1000" max="2100" step="10"><input type="number" id="rpmN" min="1000" max="2100" step="10"></div>
+      <span class="hint" id="rpmHint"></span></div>
+    <div class="field"><label for="eng">Motor</label><select id="eng"></select><span class="hint" id="engHint"></span></div>
+    <div class="field"><label for="qt">Q objetivo (m³/h)</label><input type="number" id="qt" min="100" max="3000" step="10" value="1100"><span class="hint">mín. 1020</span></div>
+    <div class="field"><label for="lim">Carga máx. motor (%)</label><input type="number" id="lim" min="40" max="100" step="5" value="80"><span class="hint">criterio de diseño</span></div>
+  </div>
+  <details class="sys">
+    <summary>Curva del sistema — parámetros (hoja “Bomba Cornell Nueva-usada”)</summary>
+    <div class="sys-grid">
+      <div class="field"><label for="sHest">H estática (m)</label><input type="number" id="sHest" step="0.5"></div>
+      <div class="field"><label for="sL">L por tramo (m)</label><input type="number" id="sL" step="10"></div>
+      <div class="field"><label for="sD1">D1 tramo 8⅝" (m)</label><input type="number" id="sD1" step="0.005"></div>
+      <div class="field"><label for="sD2">D2 tramo 6⅝" (m)</label><input type="number" id="sD2" step="0.005"></div>
+      <div class="field"><label for="sF">f Darcy</label><input type="number" id="sF" step="0.001"></div>
+      <div class="field"><label for="sFq">Q final / Q inicial</label><input type="number" id="sFq" step="0.05"></div>
+      <div class="field"><label for="sAlas">N° de alas</label><input type="number" id="sAlas" step="1" min="1"></div>
+    </div>
+    <div class="formula" id="formula"></div>
+    <div style="margin-top:10px"><button class="reset" id="sReset" type="button">Restablecer valores de la planilla</button></div>
+  </details>
+</section>
+
+<section class="summary">
+  <div class="card">
+    <div class="sec-head"><h2>Punto de trabajo</h2><p id="opTitle"></p></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="chips" id="opChips" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px"></div>
+  </div>
+  <div class="card opt" id="optTarget"></div>
+  <div class="card opt" id="optEff"></div>
+</section>
+
+<section class="charts">
+  <div class="card">
+    <div class="sec-head"><h2>Curvas H–Q y curva del sistema</h2><p id="hqNote"></p></div>
+    <div class="chart-main"><canvas id="cHQ" role="img" aria-label="Curvas altura-caudal de la bomba a distintas rpm y curva del sistema"></canvas></div>
+    <div class="legend" id="hqLegend"></div>
+  </div>
+  <div class="card side">
+    <div class="sec-head" style="margin-bottom:2px"><h2>Comportamiento vs. rpm</h2></div>
+    <div class="mini"><h3>Caudal entregado (m³/h)</h3><div class="box"><canvas id="cQ" role="img" aria-label="Caudal entregado según rpm"></canvas></div></div>
+    <div class="mini"><h3>Rendimiento de la bomba (%)</h3><div class="box" id="bE"><canvas id="cE" role="img" aria-label="Rendimiento según rpm"></canvas></div><div class="empty" id="eE" hidden>Sin datos de rendimiento para esta bomba</div></div>
+    <div class="mini"><h3>Potencia al eje vs. disponible en motor (kW)</h3><div class="box" id="bP"><canvas id="cP" role="img" aria-label="Potencia requerida y disponible según rpm"></canvas></div><div class="empty" id="eP" hidden>Sin datos de potencia para esta bomba</div></div>
+    <div class="legend" id="sideLegend"></div>
+  </div>
+</section>
+
+<section class="card">
+  <div class="sec-head"><h2>Tabla de operación por rpm</h2><p id="tblNote"></p></div>
+  <div class="tbl-wrap"><table id="tblRpm"></table></div>
+</section>
+
+<section class="card">
+  <div class="sec-head"><h2>Comparativa de bombas al caudal objetivo</h2><p>Ordenada por potencia al eje. Tocá una fila para ver esa bomba.</p></div>
+  <div class="tbl-wrap"><table id="cmp"></table></div>
+</section>
+
+<section class="card notes">
+  <div>
+    <h3>Método y supuestos</h3>
+    <ul>
+      <li>Cada bomba se describe con una curva de referencia (H, η y P en función de Q a la rpm del fabricante o de la medición) y se lleva a otras velocidades con las leyes de afinidad: Q ∝ n, H ∝ n², P ∝ n³. El rendimiento se traslada sin corrección por escala.</li>
+      <li>El punto de trabajo es la intersección de la curva de la bomba con la curva del sistema. Al ser acople directo, la rpm de la bomba es la rpm del motor.</li>
+      <li>La curva del sistema reproduce la fórmula de la planilla: pérdida por fricción de Darcy con velocidad media entre el tramo de 8⅝" y el de 6⅝", más la altura de velocidad a la salida. Con los diámetros calculados por área real difiere menos de 1 % de la planilla.</li>
+      <li>Zona recomendada: 70 % a 120 % del caudal de máximo rendimiento (BEP) a la misma rpm.</li>
+      <li>Más allá del último punto publicado o medido se admite una extrapolación lineal de hasta 15 %. Se indica en línea punteada y con el aviso “curva extrapolada”.</li>
+      <li>Potencia disponible del motor según ficha Scania; debajo de 1200 rpm se toma par constante. El consumo de gasoil es una estimación: consumo específico de plena carga más un 10 % a carga nula, con densidad de 0,84 kg/L.</li>
+      <li>No se verificó el NPSH disponible (falta el dato de succión). Se informa el NPSH requerido donde el fabricante lo publica.</li>
+    </ul>
+  </div>
+  <div>
+    <h3>Fuentes</h3>
+    <ul id="sources"></ul>
+    <h3 style="margin-top:14px">Observaciones</h3>
+    <ul>
+      <li>PP1212S17: se usa la hoja FE Select a 1600 rpm. La curva multivelocidad de Pioneer (#07815HQ) da una altura de cierre cerca de 19 % mayor a igual rpm, por eso no se mezclan.</li>
+      <li>Cornell 13,5" (13°) y (0°) y la Cornell 12,5": se interpretan como curvas de catálogo a la rpm indicada en la planilla.</li>
+      <li>Las bombas que solo tienen curva H–Q permiten ver caudal y altura, pero no rendimiento, potencia ni consumo.</li>
+    </ul>
+  </div>
+</section>
+
+<footer><span>Cálculo: leyes de afinidad sobre curvas de fabricante y planilla “Curvas de bomba”.</span><span>Finca Tolloche · Rev. A</span></footer>
+</div>
+
+<script src="js/bombas-datos.js"></script>
+<script src="js/bombas-modelo.js"></script>
+<script src="js/bombas-ui.js"></script>
+</body>
+</html>

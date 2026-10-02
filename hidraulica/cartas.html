@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cartas de aspersión · Panel Tolloche</title>
+<link rel="stylesheet" href="css/hidraulica.css">
+<style>
+#print { display: none; }
+@media print {
+  @page { size: A4; margin: 11mm 10mm; }
+  body { background: #fff; font-size: 9.5pt; }
+  .wrap { display: none !important; }
+  #print { display: block; }
+  #print h1 { font-size: 14pt; margin: 0 0 2mm; color: #1a7a4a; }
+  #print h2 { font-size: 9.5pt; margin: 5mm 0 2mm; text-transform: uppercase; letter-spacing: .05em; color: #1a7a4a; break-after: avoid; }
+  #print table { font-size: 8pt; width: 100%; border-collapse: collapse; }
+  #print th, #print td { padding: 1.2mm 1.6mm; border: 0.2mm solid #b9d9c4; }
+  #print th { background: #eafaf0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #print .dot { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #print .hdr td { border: 0.3mm solid #1a2415; text-align: left; font-size: 8.5pt; }
+  #print .hdr b { display: block; font-size: 6.5pt; text-transform: uppercase; color: #4a5e42; letter-spacing: .05em; }
+  #print .pg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3mm; align-items: start; break-inside: avoid; margin-bottom: 3mm; }
+  #print .pg + .pg { break-before: page; }
+  #print table.cp { font-size: 7pt; table-layout: auto; }
+  #print table.cp th, #print table.cp td { padding: 0.6mm 1mm; }
+  #print table.cp .dot { width: 7px; height: 7px; margin-right: 2px; }
+  #print .cols table { break-inside: auto; }
+  #print tr { break-inside: avoid; }
+  #print .pb { break-before: page; }
+  #print .foot { margin-top: 4mm; font-size: 7pt; color: #4a5e42; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="title">
+    <div><h1>Cartas de aspersión</h1><p>Boquilla por bajante, regulador y lámina según el caudal de entrada · reguladores de 10 psi</p></div>
+    <button class="btn" id="btnPrint" type="button">Imprimir / PDF</button>
+  </div>
+
+  <section class="card">
+    <div class="inputs">
+      <div class="field wide"><label for="eq">Equipo</label><select id="eq"></select><span class="hint" id="eqHint"></span></div>
+      <div class="field"><label for="q">Caudal de entrada</label><input type="number" id="q" step="10" min="50"><span class="hint">m³/h · total del equipo</span></div>
+      <div class="field"><label for="p">Presión de entrada</label><input type="number" id="p" step="0.5" min="1" placeholder="opcional"><span class="hint">psi en el manómetro · vacío = calcula la mínima</span></div>
+      <div class="field"><label for="sep">Separación aspersores</label><input type="number" id="sep" step="0.01" min="0.5"><span class="hint" id="sepHint">m</span></div>
+      <div class="field"><label for="v">Avance al 100 %</label><input type="number" id="v" step="0.01" min="0.5"><span class="hint">m/min</span></div>
+    </div>
+  </section>
+
+  <section class="kpis" id="kpis"></section>
+  <div class="chips" id="chips"></div>
+
+  <div class="grid2">
+    <section class="card">
+      <div class="ch"><h2>Boquillas a colocar</h2><p id="nozSub"></p></div>
+      <div class="tbl"><table id="noz"></table></div>
+    </section>
+    <section class="card">
+      <div class="ch"><h2>Lámina según % de avance</h2><p id="lamSub"></p></div>
+      <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:10px">
+        <div class="field" style="width:150px"><label for="mm">Lámina buscada</label><input type="number" id="mm" step="0.5" min="0.5" placeholder="mm"></div>
+        <div id="mmOut" style="font-size:.86rem;color:var(--tx2);padding-bottom:8px"></div>
+      </div>
+      <div class="tbl"><table id="lam"></table></div>
+    </section>
+  </div>
+
+  <div class="grid2">
+    <section class="card">
+      <div class="ch"><h2>Regulador</h2><p>presión mínima de entrada para que regulen todos los bajantes</p></div>
+      <div class="tbl"><table id="reg"></table></div>
+      <p class="muted" style="font-size:.76rem;margin:8px 0 0" id="regNote"></p>
+    </section>
+    <section class="card">
+      <div class="ch"><h2>Presión a lo largo del equipo</h2><div class="seg" id="segP"><button type="button" data-s="0" aria-pressed="true">Lado A</button><button type="button" data-s="1" aria-pressed="false">Lado B</button></div></div>
+      <div class="chart"><canvas id="cP" role="img" aria-label="Presión de línea y en el regulador a lo largo del equipo"></canvas></div>
+      <div class="legend" id="lgP"></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="ch"><h2>Resumen por tramo</h2><div class="seg" id="segT"><button type="button" data-s="0" aria-pressed="true">Lado A</button><button type="button" data-s="1" aria-pressed="false">Lado B</button></div></div>
+    <div class="tbl"><table id="tramos"></table></div>
+  </section>
+
+  <section class="card">
+    <details id="det">
+      <summary>Carta completa bajante por bajante</summary>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+        <div class="seg" id="segC"><button type="button" data-s="0" aria-pressed="true">Lado A</button><button type="button" data-s="1" aria-pressed="false">Lado B</button></div>
+        <div class="seg" id="segF"><button type="button" data-f="all" aria-pressed="true">Todos</button><button type="button" data-f="diff" aria-pressed="false">Distintos a la mayoría</button></div>
+      </div>
+      <div class="tbl"><table id="full"></table></div>
+    </details>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>Método y supuestos</summary>
+      <ul class="notes">
+        <li>Cada equipo se arma con la planilla de equipos: tramos de 8⅝" y 6⅝" con su largo, voladizo y marca de aspersor. La separación de aspersores sale de ancho ÷ total de aspersores (si la planilla no lo tiene, 2,29 m como la J1) y se puede cambiar arriba.</li>
+        <li>Caudal requerido por bajante: el caudal de cada lado (proporcional a su largo) se reparte por el largo que cubre cada aspersor, descontando el drenaje de la punta.</li>
+        <li>Boquilla: la de caudal más cercano a 10 psi (tablas oficiales Senninger y Komet KPT, caudal ∝ √P); después cada tramo se ajusta cambiando algunas a medio número / número vecino hasta quedar en ±0,5 %.</li>
+        <li>Presión: fricción Hazen-Williams (C 170; diámetros internos 8,41", 6,42" y 3,79" en la punta del voladizo), caudal decreciente salida por salida y altura del caño tomada del arco de cada tramo (perfil de la carta Valley J1).</li>
+        <li>Regulador: necesita en su entrada (al pie del bajante) su calibración + 0,414 bar (criterio Valley). La presión mínima de entrada es la que cumple eso en el bajante más exigido.</li>
+        <li>Lámina: caudal ÷ (ancho × avance). Avance al 100 %: 4,142 m/min (motor 56 rpm, caja 52:1, rueda 14.9×24, carta J1). Horas por pasada = recorrido ÷ avance.</li>
+        <li>Validación: con la J1 a 980 m³/h reproduce la carta Valley (presión mínima 2,07 bar, 3,28 mm y 26,5 h por pasada al 100 %).</li>
+      </ul>
+    </details>
+  </section>
+</div>
+<div id="print"></div>
+
+<script src="js/datos-equipos.js"></script>
+<script src="js/datos-boquillas.js"></script>
+<script src="js/motor-cartas.js"></script>
+<script src="js/cartas-ui.js"></script>
+</body>
+</html>
