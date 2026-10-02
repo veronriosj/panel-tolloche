@@ -13,29 +13,38 @@
 .seg button:disabled { opacity: .45; cursor: not-allowed; }
 .lnk { font: inherit; font-size: inherit; border: 0; background: none; padding: 0; color: var(--vo); text-decoration: underline; cursor: pointer; }
 @media print {
-  @page { size: A4; margin: 0; }              /* sin márgenes: el navegador no imprime la dirección ni la fecha */
-  html, body { background: #fff !important; }
+  @page { size: A4 portrait; margin: 0; }     /* sin márgenes: el navegador no imprime la dirección ni la fecha */
+  html, body { background: #fff !important; margin: 0; }
   .wrap { display: none !important; }
-  #print { display: block; }
-  #print .page { width: 210mm; height: 296mm; padding: 9mm 9mm 8mm; box-sizing: border-box; break-after: page; overflow: hidden; }
-  #print .page:last-child { break-after: auto; }
-  #print .ph { display: grid; grid-template-columns: auto 1fr auto; gap: 5mm; align-items: center; border-bottom: 0.5mm solid #1a7a4a; padding-bottom: 2.5mm; margin-bottom: 3mm; }
-  #print .ph img { height: 13mm; width: auto; }
-  #print .ph h1 { font-size: 13pt; margin: 0; color: #1a2415; }
-  #print .ph .sub { font-size: 8pt; color: #4a5e42; margin-top: 0.8mm; }
-  #print .ph .side { text-align: right; font-size: 9pt; font-weight: 700; color: #1a7a4a; }
-  #print .ph .side small { display: block; font-weight: 400; color: #4a5e42; font-size: 7.5pt; }
-  #print .grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2.2mm; align-items: start; }
-  #print table { width: 100%; border-collapse: collapse; font-size: 7pt; table-layout: fixed; }
-  #print td.cl { overflow: hidden; text-overflow: ellipsis; font-size: 6.3pt; color: #4a5e42; }
-  #print td i { font-style: normal; font-size: 5.6pt; color: #1a7a4a; font-weight: 700; }
-  #print .foot { margin-top: 2mm; font-size: 7pt; color: #4a5e42; }
-  #print th, #print td { padding: 0.28mm 0.7mm; line-height: 1.25; border: 0.2mm solid #c5e1cf; text-align: right; white-space: nowrap; }
-  #print th { background: #eafaf0; color: #1a7a4a; font-size: 6.6pt; text-transform: uppercase; letter-spacing: .03em; }
-  #print td:nth-child(n+3), #print th:nth-child(n+3) { text-align: left; }
-  #print tr.sep td { background: #eafaf0; color: #1a7a4a; font-weight: 700; text-align: left; font-size: 6.8pt; }
-  #print .dot { width: 6px; height: 6px; margin-right: 2px; vertical-align: 0; }
+  #print { display: block; font-family: Arial, "Liberation Sans", Helvetica, sans-serif; color: #1a2415; }
   #print * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #print .page { width: 210mm; height: 290mm; padding: 9mm 10mm 0; box-sizing: border-box; display: flex; flex-direction: column; break-after: page; page-break-after: always; overflow: hidden; }
+  #print .page:last-child { break-after: auto; page-break-after: auto; }
+  #print .ph { display: grid; grid-template-columns: auto 1fr auto; gap: 5mm; align-items: center; border-bottom: 0.6mm solid #1a7a4a; padding-bottom: 2.5mm; }
+  #print .ph img { height: 14mm; width: auto; }
+  #print .ph h1 { font-size: 14pt; margin: 0 0 0.8mm; color: #1a2415; }
+  #print .ph .sub { font-size: 7.8pt; color: #4a5e42; line-height: 1.35; }
+  #print .ph .side { text-align: right; font-size: 13pt; font-weight: 700; color: #1a7a4a; line-height: 1.1; }
+  #print .ph .side small { display: block; font-weight: 400; color: #4a5e42; font-size: 7.5pt; margin-top: 0.6mm; }
+  #print .res { display: flex; flex-wrap: wrap; gap: 1mm 4mm; font-size: 7.2pt; color: #4a5e42; padding: 2mm 0 0; }
+  #print .res span { white-space: nowrap; }
+  #print .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 3mm; align-items: start; margin-top: 3mm; }
+  #print table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 7pt; border: 0.3mm solid #9fcdb1; }
+  #print col.c1 { width: 14%; } #print col.c2 { width: 20%; } #print col.c3 { width: 21%; } #print col.c4 { width: 11%; } #print col.c5 { width: 34%; }
+  #print th, #print td { height: var(--rh, 3.6mm); line-height: 1; padding: 0 0.8mm; border-bottom: 0.15mm solid #dcebe1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; vertical-align: middle; }
+  #print th { background: #1a7a4a; color: #fff; font-size: 6.2pt; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; height: 4.4mm; line-height: 1; text-align: center; }
+  #print td:first-child { color: #7a8a72; font-size: 6.6pt; }
+  #print td.bq { text-align: left; font-weight: 700; font-size: 7.6pt; padding-left: 1.4mm; }
+  #print td.tp { text-align: center; font-size: 6pt; font-weight: 700; color: #1a7a4a; }
+  #print td.cl { text-align: left; font-size: 6.4pt; color: #4a5e42; }
+  #print tbody tr:nth-child(even) td { background: #f5fbf7; }
+  #print tr.esp td { background: #e9f6ee !important; }
+  #print tr.vac td { background: #fff !important; border-bottom-color: #f0f5f2; }
+  #print tr.sep td { background: #d7efe0 !important; color: #1a7a4a; font-weight: 700; text-align: left; font-size: 6.8pt; padding-left: 1.2mm; border-top: 0.25mm solid #9fcdb1; }
+  #print tr.sep td span { float: right; font-weight: 400; font-size: 6pt; color: #4a5e42; }
+  #print .dot { display: inline-block; width: 2.2mm; height: 2.2mm; border-radius: 50%; border: 0.15mm solid rgba(0,0,0,.35); margin: 0 1mm 0 0; vertical-align: -0.35mm; }
+  #print .foot span:last-child { white-space: nowrap; }
+  #print .foot { margin-top: auto; display: flex; justify-content: space-between; gap: 6mm; font-size: 6.6pt; color: #4a5e42; border-top: 0.3mm solid #c5e1cf; padding: 1.6mm 0 6mm; }
 }
 </style>
 </head>

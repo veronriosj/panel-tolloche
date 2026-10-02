@@ -159,32 +159,51 @@
   }
   function renderFull() { $('full').innerHTML = fullRows(cur.res[st.sC], st.f); }
 
-  // Carta impresa: solo boquilla por bajante, con logo LIAG. Un lado por hoja (5 columnas).
+  // Carta impresa: solo boquilla por bajante, con logo LIAG. Un lado por hoja, 4 columnas parejas.
   function buildPrint() {
     const e = eq(), hoy = new Date().toLocaleDateString('es-AR');
-    const crit = st.modo === 'valley' ? 'Según carta Valley' : 'Según tabla propia';
-    const info = `Caudal ${fmt(st.Q, 1)} m³/h · Presión mín. de entrada ${fmt(cur.PinReq / C.PSI, 1)} psi (${fmt(cur.PinReq, 2)} bar) · Regulador 10 psi · ${cur.brand.nombre} · ${crit}${cur.modo === 'valley' ? ` (${cur.chart.carta}, ${cur.chart.fecha})` : ''}`;
-    const ley = cur.modo === 'valley' ? 'Dir = Directional en torre · Dren = drenaje de punta sin regulador' : 'H = huella seca en torre · Dren = drenaje de punta sin regulador';
-    const MAXR = 58, COLS = 5;
+    const crit = cur.modo === 'valley' ? `Según carta Valley ${cur.chart.carta} (${cur.chart.fecha})` : 'Según tabla propia';
+    const info1 = `Caudal ${fmt(st.Q, 1)} m³/h · Presión mín. de entrada ${fmt(cur.PinReq / C.PSI, 1)} psi (${fmt(cur.PinReq, 2)} bar) · Regulador PSR 10 psi`;
+    const info2 = `${cur.brand.nombre} · ${crit}`;
+    const corto = n => n.replace('oscuro', 'osc.').replace('Turquesa osc.', 'Turq. osc.');
+    const TIPO = { spray: 'H', dir: 'Dir', drain: 'Dr', asp: '' };
+    const DIAM = { '8': '8⅝"', '6': '6⅝"', 'OH': '6⅝" + 4"' };
+    const MAXR = 72, COLS = 4, ALTO = 234;   // filas máx. por columna · alto útil de la grilla (mm)
+    const row = o => { const z = o.noz, c = colorOf(z);
+      return `<tr class="${o.t !== 'asp' ? 'esp' : ''}"><td>${o.c}</td><td>${fmt(o.x, 1)}</td><td class="bq">${z.label}</td><td class="tp">${TIPO[o.t]}</td><td class="cl"><i class="dot" style="background:${c[1]}"></i>${corto(c[0])}</td></tr>`; };
+    const sep = (s, sigue) => `<tr class="sep"><td colspan="5">${s.n === 'OH' ? 'Voladizo' : 'Tramo ' + s.n}<span>${sigue ? 'continúa' : DIAM[s.d] + ' · ' + fmt(s.L, 1) + ' m'}</span></td></tr>`;
+    const vacia = '<tr class="vac"><td></td><td></td><td></td><td></td><td></td></tr>';
     let pages = '';
-    const ab = { spray: 'H', dir: 'Dir', drain: 'Dren' };
     cur.res.forEach((r, li) => {
-      const rows = []; let si = -1;
-      for (const o of r.outs) {
-        if (o.span !== si) { si = o.span; const s = r.spans[si]; rows.push(`<tr class="sep"><td colspan="4">${s.n === 'OH' ? 'Voladizo' : 'Tramo ' + s.n}</td></tr>`); }
-        const z = o.noz;
-        rows.push(`<tr><td>${o.c}</td><td>${fmt(o.x, 1)}</td><td><b>${z.label}</b>${ab[o.t] ? ` <i>${ab[o.t]}</i>` : ''}</td><td class="cl">${dot(z)}${colorOf(z)[0]}</td></tr>`);
+      // secuencia de filas: separador de tramo + bajantes
+      const items = []; let si = -1;
+      for (const o of r.outs) { if (o.span !== si) { si = o.span; items.push({ sep: r.spans[si] }); } items.push({ o, s: r.spans[si] }); }
+      // filas por columna: parejas, con lugar para los "continúa"
+      const R = Math.min(MAXR, Math.ceil((items.length + COLS) / COLS));
+      const cols = []; let col = null;
+      for (const it of items) {
+        if (!col || col.length >= R || (it.sep && col.length >= R - 1)) { col = []; cols.push(col); if (!it.sep) col.push(sep(it.s, true)); }
+        col.push(it.sep ? sep(it.sep, false) : row(it.o));
       }
-      const nPag = Math.ceil(rows.length / (MAXR * COLS));
+      const resumen = Object.entries(r.count).sort((x, y) => y[1] - x[1]).map(([id, k]) => { const z = cur.tab.find(t => t.id === id), c = colorOf(z);
+        return `<span><i class="dot" style="background:${c[1]}"></i><b>${z.label}</b>${z.modelo ? ' ' + z.modelo : ''} ${corto(c[0])} <b>×${k}</b></span>`; }).join('');
+      const drs = r.outs.filter(o => o.t === 'drain').map(o => `<span><i class="dot" style="background:${colorOf(o.noz)[1]}"></i><b>${o.noz.label}</b> drenaje <b>×1</b></span>`).join('');
+      const nPag = Math.ceil(cols.length / COLS);
       for (let pg = 0; pg < nPag; pg++) {
-        const pr = rows.slice(pg * MAXR * COLS, (pg + 1) * MAXR * COLS), per = Math.ceil(pr.length / COLS);
-        let cols = '';
-        for (let c = 0; c < COLS; c++) {
-          const chunk = pr.slice(c * per, (c + 1) * per);
-          cols += chunk.length ? `<table><colgroup><col style="width:16%"><col style="width:22%"><col style="width:29%"><col style="width:33%"></colgroup><thead><tr><th>Nº</th><th>m</th><th>Boq.</th><th>Color</th></tr></thead><tbody>${chunk.join('')}</tbody></table>` : '<div></div>';
-        }
-        pages += `<section class="page"><div class="ph">${window.HID_LOGO ? `<img src="${window.HID_LOGO}" alt="LIAG Argentina S.A.U.">` : ''}<div><h1>Carta de aspersión · Equipo ${e.id}</h1><div class="sub">${info}</div></div>
-          <div class="side">Lado ${li === 0 ? 'A' : 'B'}<small>hoja ${pg + 1} de ${nPag} · ${hoy}</small></div></div><div class="grid">${cols}</div><div class="foot">${ley}</div></section>`;
+        const tablas = cols.slice(pg * COLS, (pg + 1) * COLS).map(c => {
+          while (c.length < R) c.push(vacia);
+          return `<table><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"><col class="c5"></colgroup><thead><tr><th>Nº</th><th>m</th><th>Boq.</th><th>T.</th><th>Color</th></tr></thead><tbody>${c.join('')}</tbody></table>`;
+        });
+        while (tablas.length < COLS) tablas.push('<div></div>');
+        const rh = Math.min(4.3, ALTO / R).toFixed(2);
+        pages += `<section class="page" style="--rh:${rh}mm">
+          <header class="ph">${window.HID_LOGO ? `<img src="${window.HID_LOGO}" alt="LIAG Argentina S.A.U.">` : ''}
+            <div><h1>Carta de aspersión · Equipo ${e.id}</h1><div class="sub">${info1}</div><div class="sub">${info2}</div></div>
+            <div class="side">Lado ${li === 0 ? 'A' : 'B'}<small>${r.outs.length} salidas · hoja ${pg + 1}/${nPag}</small><small>${hoy}</small></div></header>
+          ${pg === 0 ? `<div class="res">${resumen}${drs}</div>` : ''}
+          <div class="grid">${tablas.join('')}</div>
+          <footer class="foot"><span>Tipo: <b>Dir</b> Directional junto a la torre · <b>H</b> huella seca · <b>Dr</b> drenaje de punta sin regulador · boquillas para PSR 10 psi</span><span>LIAG Argentina S.A.U. · Finca Tolloche</span></footer>
+        </section>`;
       }
     });
     $('print').innerHTML = pages;
