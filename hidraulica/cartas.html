@@ -44,7 +44,6 @@
       <div class="field wide"><label for="eq">Equipo</label><select id="eq"></select><span class="hint" id="eqHint"></span></div>
       <div class="field"><label for="q">Caudal de entrada</label><input type="number" id="q" step="10" min="50"><span class="hint">m³/h · total del equipo</span></div>
       <div class="field"><label for="p">Presión de entrada</label><input type="number" id="p" step="0.5" min="1" placeholder="opcional"><span class="hint">psi en el manómetro · vacío = calcula la mínima</span></div>
-      <div class="field"><label for="sep">Separación aspersores</label><input type="number" id="sep" step="0.01" min="0.5"><span class="hint" id="sepHint">m</span></div>
       <div class="field"><label for="v">Avance al 100 %</label><input type="number" id="v" step="0.01" min="0.5"><span class="hint">m/min</span></div>
     </div>
   </section>
@@ -100,7 +99,7 @@
     <details>
       <summary>Método y supuestos</summary>
       <ul class="notes">
-        <li>Cada equipo se arma con la planilla de equipos: tramos de 8⅝" y 6⅝" con su largo, voladizo y marca de aspersor. La separación de aspersores sale de ancho ÷ total de aspersores (si la planilla no lo tiene, 2,29 m como la J1) y se puede cambiar arriba.</li>
+        <li>Armado de cada equipo (planilla de equipos + regla de campo): tramos de 8⅝" y 6⅝" con su largo; 3 bajantes por caño a 1,11 · 3,31 · 5,51 m de la brida (2,20 m entre bajantes); primer caño del primer tramo anulado (salida de la T) en ambas alas; bajante anulado junto a cada torre (2 por tramo) y huella seca con 2 aspersores, uno a cada lado de la torre; voladizo con 2 caños de 6⅝" (3 bajantes c/u) y caño de 4" con 5 bajantes, más el drenaje de punta.</li>
         <li>Caudal requerido por bajante: el caudal de cada lado (proporcional a su largo) se reparte por el largo que cubre cada aspersor, descontando el drenaje de la punta.</li>
         <li>Boquilla: la de caudal más cercano a 10 psi (tablas oficiales Senninger y Komet KPT, caudal ∝ √P); después cada tramo se ajusta cambiando algunas a medio número / número vecino hasta quedar en ±0,5 %.</li>
         <li>Presión: fricción Hazen-Williams (C 170; diámetros internos 8,41", 6,42" y 3,79" en la punta del voladizo), caudal decreciente salida por salida y altura del caño tomada del arco de cada tramo (perfil de la carta Valley J1).</li>

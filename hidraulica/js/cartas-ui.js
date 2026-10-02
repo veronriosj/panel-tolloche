@@ -16,11 +16,11 @@
   const chip = (c, t) => `<span class="chip ${c}">${t}</span>`;
   const colorOf = z => COL[z.color] || [z.color || '—', '#ccc'];
   const dot = z => `<i class="dot" style="background:${colorOf(z)[1]}"></i>`;
-  const tipo = t => ({ spray: 'Spray (torre)', asp: 'Aspersor', drain: 'Drenaje' })[t];
+  const tipo = t => ({ spray: 'Huella seca (torre)', asp: 'Aspersor', drain: 'Drenaje' })[t];
   const store = { get(k) { try { return JSON.parse(localStorage.getItem('hidCartas') || '{}')[k]; } catch (e) { return undefined; } },
     set(k, v) { try { const o = JSON.parse(localStorage.getItem('hidCartas') || '{}'); o[k] = v; localStorage.setItem('hidCartas', JSON.stringify(o)); } catch (e) {} } };
 
-  const st = { id: store.get('id') || 'J1', Q: null, Ppsi: null, sep: null, v: window.HID_V100, sP: 0, sT: 0, sC: 0, f: 'all', mm: null };
+  const st = { id: store.get('id') || 'J1', Q: null, Ppsi: null, v: window.HID_V100, sP: 0, sT: 0, sC: 0, f: 'all', mm: null };
   const eq = () => EQ.find(e => e.id === st.id) || EQ[0];
   const defQ = e => e.id === 'J1' ? 980.2 : Math.round(e.ancho * 0.816 / 10) * 10;  // misma lámina que la J1 (3,3 mm al 100 %)
 
@@ -33,12 +33,11 @@
   function init() {
     $('eq').innerHTML = EQ.map(e => `<option value="${e.id}">${e.id} · ${e.marca} · ${fmt(e.ancho)} m · ${e.tramos} tramos</option>`).join('');
     $('eq').value = st.id;
-    const reset = () => { const e = eq(); st.Q = store.get('Q_' + e.id) || defQ(e); st.sep = e.sepTabla || 2.29; st.Ppsi = null; $('q').value = st.Q; $('sep').value = st.sep; $('p').value = ''; };
+    const reset = () => { const e = eq(); st.Q = store.get('Q_' + e.id) || defQ(e); st.Ppsi = null; $('q').value = st.Q; $('p').value = ''; };
     reset(); $('v').value = st.v;
     $('eq').onchange = ev => { st.id = ev.target.value; store.set('id', st.id); reset(); render(); };
     $('q').onchange = ev => { const v = +ev.target.value; if (v > 0) { st.Q = v; store.set('Q_' + st.id, v); } render(); };
     $('p').onchange = ev => { const v = ev.target.value === '' ? null : +ev.target.value; st.Ppsi = v > 0 ? v : null; render(); };
-    $('sep').onchange = ev => { const v = +ev.target.value; if (v > 0.5) st.sep = v; render(); };
     $('v').onchange = ev => { const v = +ev.target.value; if (v > 0) st.v = v; render(); };
     $('mm').oninput = ev => { st.mm = +ev.target.value || null; renderLam(); };
     const seg = (id, key, attr = 's') => document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => { st[key] = attr === 's' ? +b.dataset.s : b.dataset.f; render(); });
@@ -50,13 +49,12 @@
   let cur, lam;
   function render() {
     const e = eq(), Pin = st.Ppsi ? st.Ppsi * C.PSI : null;
-    cur = C.carta(e, TAB, { Q: st.Q, Pin, reg: 10, sep: st.sep });
+    cur = C.carta(e, TAB, { Q: st.Q, Pin, reg: 10 });
     lam = C.lamina(e, st.Q, st.v);
     ['segP', 'segT', 'segC'].forEach((id, i) => document.querySelectorAll(`#${id} button`).forEach(b => b.setAttribute('aria-pressed', +b.dataset.s === [st.sP, st.sT, st.sC][i])));
     document.querySelectorAll('#segF button').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === st.f));
     const nAsp = cur.res.reduce((a, r) => a + r.regs.length, 0);
     $('eqHint').textContent = `${cur.brand.nombre} · ${fmt(e.ancho)} m de ancho · ${fmt(e.recorrido)} m de recorrido · voladizo ${fmt(e.voladizo, 2)} m · ${e.anio}`;
-    $('sepHint').textContent = `m · ${nAsp} aspersores${e.totales ? ` (planilla: ${e.totales})` : ' (planilla sin dato: 2,29 m)'}`;
 
     // KPIs
     const ok = cur.ok, P = cur.PinReq;
@@ -64,7 +62,7 @@
       `<div class="k ${st.Ppsi && !ok ? 'bad' : ''}"><div class="l">Presión mínima de entrada</div><div class="v">${fmt(P / C.PSI, 1)}<small>psi</small></div><div class="s">${fmt(P, 2)} bar en el manómetro · PSR 10 psi</div></div>`,
       `<div class="k"><div class="l">Lámina al 100 %</div><div class="v">${fmt(lam.mm100, 2)}<small>mm</small></div><div class="s">${fmt(lam.h100, 1)} h por pasada · ${fmt(st.v, 3)} m/min</div></div>`,
       `<div class="k"><div class="l">Caudal por lado</div><div class="v">${fmt(cur.res[0].Qs, 1)}<small>m³/h</small></div><div class="s">lado B ${fmt(cur.res[1].Qs, 1)} m³/h · ${fmt(st.Q / 3.6 / (e.ancho * e.recorrido / 1e4), 3)} L/s por ha</div></div>`,
-      `<div class="k"><div class="l">Aspersores</div><div class="v">${nAsp}<small>+ 2 drenajes</small></div><div class="s">cada ${fmt(cur.sep, 2)} m · ${cur.brand.nombre}</div></div>`,
+      `<div class="k"><div class="l">Aspersores</div><div class="v">${nAsp}<small>+ 2 drenajes</small></div><div class="s">3 por caño (2,20 m) · ${cur.brand.nombre}</div></div>`,
     ].join('');
     const ch = [];
     if (st.Ppsi) ch.push(ok ? chip('ok', `Con ${fmt(st.Ppsi, 1)} psi regulan todos los bajantes`) : chip('bad', `Con ${fmt(st.Ppsi, 1)} psi no regulan los últimos bajantes: faltan ${fmt((P - Pin) / C.PSI, 1)} psi`));
@@ -100,7 +98,7 @@
 
   function renderReg() {
     const Pin = st.Ppsi ? st.Ppsi * C.PSI : null;
-    const s = C.regulatorStudy(eq(), TAB, st.Q, Pin, st.sep);
+    const s = C.regulatorStudy(eq(), TAB, st.Q, Pin);
     $('reg').innerHTML = `<thead><tr><th>PSR</th><th>Entrada mín.</th><th>Boquillas</th><th style="text-align:left">Con tu presión</th></tr></thead><tbody>` +
       s.map(r => `<tr class="${r.reg === 10 ? 'sel' : ''}"><td>${r.reg} psi${r.reg === 10 ? ' <span class="muted">(instalado)</span>' : ''}</td><td>${fmt(r.PinReq / C.PSI, 1)} psi<br><span class="muted">${fmt(r.PinReq, 2)} bar</span></td><td>${r.nMin.label} a ${r.nMax.label}</td><td class="t">${!r.inRange ? chip('warn', 'fuera de rango') : Pin == null ? '<span class="muted">—</span>' : r.ok ? chip('ok', 'alcanza') : chip('bad', 'no alcanza')}</td></tr>`).join('') + '</tbody>';
     const b = cur.brand;
@@ -149,7 +147,7 @@
     const rows = []; let si = -1;
     for (const o of r.outs) {
       if (o.span !== si) { si = o.span; const s = r.spans[si]; rows.push(`<tr class="sep"><td colspan="5">${s.n === 'OH' ? 'Voladizo' : 'Tramo ' + s.n + (s.d === '8' ? ' · 8⅝"' : ' · 6⅝"')} · hasta ${fmt(s.end, 1)} m</td></tr>`); }
-      rows.push(`<tr><td>${o.c}</td><td>${fmt(o.x, 1)}</td><td>${dot(o.noz)}<b>${o.noz.label}</b>${o.t === 'spray' ? ' S' : o.t === 'drain' ? ' D' : ''}</td><td>${fmt(o.line, 2)}</td><td>${fmt(o.q, 2)}</td></tr>`);
+      rows.push(`<tr><td>${o.c}</td><td>${fmt(o.x, 1)}</td><td>${dot(o.noz)}<b>${o.noz.label}</b>${o.t === 'spray' ? ' H' : o.t === 'drain' ? ' D' : ''}</td><td>${fmt(o.line, 2)}</td><td>${fmt(o.q, 2)}</td></tr>`);
     }
     const head = '<thead><tr><th>Nº</th><th>m</th><th>Boquilla</th><th>bar</th><th>m³/h</th></tr></thead>';
     const N = 52, tables = [];
@@ -168,14 +166,14 @@
       <table class="hdr"><tr>
         <td><b>Establecimiento</b>Finca Tolloche</td><td><b>Equipo</b>${e.id} · lineal centerfeed · ${e.tramos} tramos</td><td><b>Aspersor</b>${cur.brand.nombre}</td><td><b>Regulador</b>PSR 10 psi (0,69 bar)</td><td><b>Fecha</b>${hoy}</td>
       </tr><tr>
-        <td><b>Caudal de entrada</b>${fmt(st.Q, 1)} m³/h</td><td><b>Presión mínima de entrada</b>${fmt(cur.PinReq / C.PSI, 1)} psi · ${fmt(cur.PinReq, 2)} bar</td><td><b>Ancho / recorrido</b>${fmt(e.ancho)} m / ${fmt(e.recorrido)} m</td><td><b>Separación</b>${fmt(cur.sep, 2)} m</td><td><b>Lámina 100 %</b>${fmt(lam.mm100, 2)} mm · ${fmt(lam.h100, 1)} h</td>
+        <td><b>Caudal de entrada</b>${fmt(st.Q, 1)} m³/h</td><td><b>Presión mínima de entrada</b>${fmt(cur.PinReq / C.PSI, 1)} psi · ${fmt(cur.PinReq, 2)} bar</td><td><b>Ancho / recorrido</b>${fmt(e.ancho)} m / ${fmt(e.recorrido)} m</td><td><b>Bajantes</b>3 por caño · 2,20 m</td><td><b>Lámina 100 %</b>${fmt(lam.mm100, 2)} mm · ${fmt(lam.h100, 1)} h</td>
       </tr></table>
       ${st.Ppsi ? `<p>Presión de entrada informada: ${fmt(st.Ppsi, 1)} psi — ${cur.ok ? 'regulan todos los bajantes' : 'NO alcanza para regular todos los bajantes'}.</p>` : ''}
       <h2>Boquillas a colocar</h2>${noz}
       <h2>Lámina según % de avance</h2>${$('lam').outerHTML}
       <h2>Resumen por tramo · Lado A</h2>${tram(0)}
       <h2>Resumen por tramo · Lado B</h2>${tram(1)}
-      <h2 class="pb">Carta completa · Lado A <span style="font-weight:400;text-transform:none">(S = spray de torre · D = drenaje)</span></h2>${printRows(cur.res[0])}
+      <h2 class="pb">Carta completa · Lado A <span style="font-weight:400;text-transform:none">(H = huella seca de torre · D = drenaje)</span></h2>${printRows(cur.res[0])}
       <h2 class="pb">Carta completa · Lado B</h2>${printRows(cur.res[1])}
       <p class="foot">Cálculo: Panel Tolloche · Cálculos hidráulicos. Tablas Senninger / Komet KPT a 10 psi; fricción Hazen-Williams C 170; perfil de tramos según carta Valley J1. Verificar en campo la presión de entrada y el caudal.</p>`;
   }

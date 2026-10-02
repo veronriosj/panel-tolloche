@@ -15,7 +15,7 @@
   const lin = (pts, x) => { if (x <= pts[0][0]) return pts[0][1]; for (let i = 1; i < pts.length; i++) if (x <= pts[i][0]) { const [a, ya] = pts[i - 1], [b, yb] = pts[i]; return ya + (yb - ya) * (x - a) / (b - a); } return pts[pts.length - 1][1]; };
 
   const BRANDS = {
-    'I-WOB': { tabla: 'senninger', nombre: 'Senninger I-Wob', pmin: 6, pmax: 15, rec: 10, sprayTorre: true },
+    'I-WOB': { tabla: 'senninger', nombre: 'Senninger I-Wob', pmin: 6, pmax: 15, rec: 10 },
     'UP3': { tabla: 'senninger', nombre: 'Senninger UP3', pmin: 6, pmax: 15, rec: 10 },
     'UP3 chino': { tabla: 'senninger', nombre: 'UP3 (compatible)', pmin: 6, pmax: 15, rec: 10 },
     'S. SPRAY': { tabla: 'senninger', nombre: 'Senninger Super Spray', pmin: 6, pmax: 40, rec: 10 },
@@ -23,31 +23,46 @@
   };
 
   // Genera las salidas de un lado del equipo
-  function buildSide(eq, li, sep) {
+  function buildSide(eq, li) {
     const spans = [], outs = []; let x = 0;
     for (const [n, d, L] of eq.lados[li]) for (let k = 0; k < n; k++) { spans.push({ n: String(spans.length + 1), d, L, start: x, end: x + L }); x += L; }
     spans.push({ n: 'OH', d: 'OH', L: eq.voladizo, start: x, end: x + eq.voladizo }); x += eq.voladizo;
-    const brand = BRANDS[eq.marca] || BRANDS['I-WOB'];
     let c = 1;
+    // Armado de campo (todos los equipos):
+    // · 3 bajantes por caño, a 1,11 · 3,31 · 5,51 m de la brida (2,20 m entre bajantes); caño = largo del tramo / cantidad de caños.
+    // · 1er caño del 1er tramo anulado (salida de la T) en ambas alas.
+    // · Se anula el bajante junto a cada torre (2 por tramo); en cada torre una huella seca con 2 aspersores, uno a cada lado.
+    // · Voladizo: 2 caños de 6 5/8" con 3 bajantes c/u + caño de 4" con 5 bajantes; drenaje en la punta.
+    const OFF = [1.11, 3.31, 5.51], PIPE = 6.87;
     spans.forEach((s, si) => {
-      if (s.d === 'OH') {            // voladizo: primer aspersor a 0,76 m de la torre y último a 0,74 m de la punta (carta J1)
-        const n = Math.max(1, Math.round((s.L - 1.5) / sep) + 1), step = n > 1 ? (s.L - 1.5) / (n - 1) : 0;
-        for (let k = 0; k < n; k++) { const xx = s.start + 0.76 + k * step; outs.push({ c: c++, x: xx, t: 'asp', span: si, drop: Math.round(lin(ARCH.OH, (xx - s.start) / s.L)) }); }
+      if (s.d === 'OH') {
+        for (let p = 0; p < 2; p++) OFF.forEach(o => { const xx = s.start + p * PIPE + o; outs.push({ x: xx, t: 'asp', span: si, drop: Math.round(lin(ARCH.OH, (xx - s.start) / s.L)) }); });
+        const r0 = s.start + 2 * PIPE + 0.6, r1 = s.end - 0.74;
+        for (let k = 0; k < 5; k++) { const xx = r0 + k * (r1 - r0) / 4; outs.push({ x: xx, t: 'asp', span: si, drop: Math.round(lin(ARCH.OH, (xx - s.start) / s.L)) }); }
         return;
       }
-      const n = Math.max(1, Math.round(s.L / sep));
-      for (let k = 0; k < n; k++) {
-        const rel = (k + 0.5) / n;
-        const t = (brand.sprayTorre && (k === 0 || k === n - 1)) ? 'spray' : 'asp';
-        outs.push({ c: c++, x: s.start + rel * s.L, t, span: si, drop: Math.round(lin(ARCH[s.d], rel)) });
+      const pipes = s.L < 51 ? 7 : 8, pitch = s.L / pipes;
+      for (let p = 0; p < pipes; p++) {
+        if (si === 0 && p === 0) continue;                       // caño anulado a la salida de la T
+        OFF.forEach((o, j) => {
+          if (p === 0 && j === 0) return;                        // anulado junto a la torre anterior
+          if (p === pipes - 1 && j === 2) return;                // anulado junto a la torre siguiente (sale la huella seca)
+          const xx = s.start + p * pitch + o;
+          outs.push({ x: xx, t: 'asp', span: si, drop: Math.round(lin(ARCH[s.d], (xx - s.start) / s.L)) });
+        });
       }
+      // huella seca en la torre del final del tramo: un aspersor a cada lado de la torre
+      outs.push({ x: s.end - 1.2, t: 'spray', span: si, drop: Math.round(lin(ARCH[s.d], 0.978)) });
+      const nx = spans[si + 1];
+      if (nx && nx.d !== 'OH') outs.push({ x: s.end + 1.2, t: 'spray', span: si + 1, drop: Math.round(lin(ARCH[nx.d], 0.022)) });
     });
+    outs.sort((p, q) => p.x - q.x); outs.forEach(o => o.c = c++);
     outs.push({ c: c++, x: x - 0.31, t: 'drain', span: spans.length - 1, drop: null });
     const L8 = spans.filter(s => s.d === '8').reduce((a, s) => a + s.L, 0);
     const L6 = spans.filter(s => s.d === '6').reduce((a, s) => a + s.L, 0);
     const tip = Math.min(TIP_4IN, eq.voladizo / 3 * 1.0 > TIP_4IN ? TIP_4IN : eq.voladizo / 3);
     const pipes = [{ L: L8, id_in: ID_8 }, { L: L6 + eq.voladizo - tip, id_in: ID_6 }, { L: tip, id_in: ID_4 }];
-    return { spans, outlets: outs, pipes, L: x, brand };
+    return { spans, outlets: outs, pipes, L: x };
   }
 
   const pipeAt = (pipes, x) => { let a = 0; for (const p of pipes) { a += p.L; if (x <= a + 1e-6) return p.id_in; } return pipes[pipes.length - 1].id_in; };
@@ -125,12 +140,11 @@
   }
 
   // Carta completa del equipo (los dos lados). Si Pin es null, calcula con la presión mínima de entrada.
-  function carta(eq, TABLAS, { Q, Pin = null, reg = 10, sep = null }) {
+  function carta(eq, TABLAS, { Q, Pin = null, reg = 10 }) {
     const brand = BRANDS[eq.marca] || BRANDS['I-WOB'];
     const tab = TABLAS[brand.tabla];
     const drainNoz = brand.tabla === 'komet' ? tab.find(z => z.d128 === 42) : tab.find(z => z.d128 === 42);
-    const s = sep || eq.sepTabla || 2.286;
-    const sides = [0, 1].map(li => buildSide(eq, li, s));
+    const sides = [0, 1].map(li => buildSide(eq, li));
     const Ltot = sides[0].L + sides[1].L;
     const run = P => sides.map(sd => calcSide(sd, tab, drainNoz, Q * sd.L / Ltot, P, reg));
     let r = run(5);                                     // presión alta: todos regulan → presión mínima
@@ -138,13 +152,13 @@
     const Puse = Pin == null ? PinReq : Pin;
     r = run(Puse);
     const count = {}; r.forEach(x => Object.entries(x.count).forEach(([k, v]) => count[k] = (count[k] || 0) + v));
-    return { eq, brand, tab, sep: s, sides, res: r, PinReq, overMax: r.reduce((a, x) => a + x.overMax, 0), underMin: r.reduce((a, x) => a + x.underMin, 0), Pin: Puse, ok: Math.min(...r.map(x => x.minMargin)) >= -1e-9, count, Qact: r.reduce((a, x) => a + x.Qact, 0), reg };
+    return { eq, brand, tab, sides, res: r, PinReq, overMax: r.reduce((a, x) => a + x.overMax, 0), underMin: r.reduce((a, x) => a + x.underMin, 0), Pin: Puse, ok: Math.min(...r.map(x => x.minMargin)) >= -1e-9, count, Qact: r.reduce((a, x) => a + x.Qact, 0), reg };
   }
 
-  function regulatorStudy(eq, TABLAS, Q, Pin, sep) {
+  function regulatorStudy(eq, TABLAS, Q, Pin) {
     const brand = BRANDS[eq.marca] || BRANDS['I-WOB'];
     return [6, 10, 15, 20].map(reg => {
-      const c = carta(eq, TABLAS, { Q, Pin, reg, sep });
+      const c = carta(eq, TABLAS, { Q, Pin, reg });
       const idx = Object.keys(c.count).map(id => c.tab.findIndex(z => z.id === id));
       return { reg, PinReq: c.PinReq, ok: Pin == null ? true : Pin >= c.PinReq - 1e-9, inRange: reg >= brand.pmin && reg <= brand.pmax,
         nMin: c.tab[Math.min(...idx)], nMax: c.tab[Math.max(...idx)] };

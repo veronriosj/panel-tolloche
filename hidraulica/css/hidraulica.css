@@ -28,7 +28,7 @@ body { margin: 0; font-family: "Segoe UI", system-ui, -apple-system, Roboto, san
 .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 900px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
 
-.inputs { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 10px; align-items: end; }
+.inputs { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; align-items: end; }
 @media (max-width: 900px) { .inputs { grid-template-columns: 1fr 1fr; } .inputs .wide { grid-column: 1 / -1; } }
 @media (max-width: 480px) { .inputs { grid-template-columns: 1fr; } }
 .field { display: grid; gap: 4px; min-width: 0; }
