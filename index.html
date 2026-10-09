@@ -502,7 +502,7 @@ table.mt tbody td{padding:6px 9px;border-bottom:1px solid var(--br);vertical-ali
       </div>
       <div style="overflow-x:auto">
         <table class="mt" style="border-collapse:collapse">
-          <thead><tr><th style="border-right:1px solid var(--br)">Lote</th><th style="border-right:1px solid var(--br)">Semana</th><th style="border-right:1px solid var(--br)">Equipo</th><th style="border-right:1px solid var(--br)">% Avance</th><th style="border-right:1px solid var(--br)">mm objetivo</th><th style="border-right:1px solid var(--br)">Horas</th><th style="border-right:1px solid var(--br)">% en Balance Hídrico</th><th style="border-right:1px solid var(--br)">Avance real</th><th style="border-right:1px solid var(--br)">Fecha</th><th style="border-right:1px solid var(--br)">Comentario</th><th>Autor</th></tr></thead>
+          <thead><tr><th style="border-right:1px solid var(--br)">Lote</th><th style="border-right:1px solid var(--br)">Semana</th><th style="border-right:1px solid var(--br)">Equipo</th><th style="border-right:1px solid var(--br)">% Avance</th><th style="border-right:1px solid var(--br)">% en Balance Hídrico</th><th style="border-right:1px solid var(--br)">Avance real</th><th>Autor</th></tr></thead>
           <tbody id="tb-riegoft"></tbody>
         </table>
       </div>
@@ -3225,24 +3225,16 @@ function renderRiegoFT(){
     const celdaAvance=yaConfirmado
       ? `<td style="${bd}">${r.cumpl}%</td>`
       : `<td style="${bd}"><input type="number" min="0" max="100" step="1" value="${AVANCE_RIEGO_FT[clave]??''}" placeholder="0-100"
-          style="width:70px;padding:4px 6px;border:1px solid ${tardio?'#d93025':'var(--br)'};border-radius:5px"
-          onchange="guardarAvanceRiegoFT('${clave}',this.value,this)">%${tardio?' (tardío)':''}</td>`;
+          style="width:70px;padding:4px 6px;border:1px solid var(--br);border-radius:5px"
+          onchange="guardarAvanceRiegoFT('${clave}',this.value,this)">%</td>`;
 
-    const celdaFecha=`<td style="${bd}"><input type="date" id="fecha-ini-${clave}" value="${FECHA_INICIO_FT[clave]||''}" title="Fecha"
-          style="padding:4px 6px;border:1px solid var(--br);border-radius:5px;font-size:.78rem"
-          onchange="guardarFechaInicioFT('${clave}',this.value,this)"></td>`;
-    const celdaComentario=`<td style="${bd}"><input type="text" value="${(COMENTARIO_FT[clave]||'').replace(/"/g,'&quot;')}" placeholder="..."
-          style="width:110px;padding:4px 6px;border:1px solid var(--br);border-radius:5px;font-size:.78rem"
-          onchange="guardarComentarioFT('${clave}',this.value,this)"></td>`;
     return `
-    <tr style="${tardio?'background:#fdecea':''}">
+    <tr>
     <td style="${bd}">${r.lote||"—"}</td><td style="${bd}">S${(r.wk??0)+1} · ${fechaSemanaFT(r.wk)}</td><td style="${bd}">${r.equipo||"—"}</td>
-    <td style="${bd}">${r.pct??"—"}%</td><td style="${bd}">${r.mm??"—"} mm</td><td style="${bd}">${horasReg!==null?horasReg.toFixed(1)+" h":"—"}</td><td style="${bd}">${r.cumpl??0}%</td>
+    <td style="${bd}">${r.pct??"—"}%</td><td style="${bd}">${r.cumpl??0}%</td>
     ${celdaAvance}
-    ${celdaFecha}
-    ${celdaComentario}
     <td>${r.autor||"—"}</td></tr>`;
-  }).join(""):`<tr><td colspan="11" style="text-align:center;padding:18px;color:#888">Sin programas de riego cargados todavía</td></tr>`;
+  }).join(""):`<tr><td colspan="7" style="text-align:center;padding:18px;color:#888">Sin programas de riego cargados todavía</td></tr>`;
   const tardios=riegoFTData.filter(esTardioFT).length;
   document.getElementById("ks-riegoft").innerHTML=`
     <div class="k we"><div class="val">${riegoFTFilt.length}</div><div class="lbl">Programas (filtrados)</div></div>
