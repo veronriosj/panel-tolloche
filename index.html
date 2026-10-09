@@ -495,7 +495,7 @@ table.mt tbody td{padding:6px 9px;border-bottom:1px solid var(--br);vertical-ali
       </div>
       <div style="overflow-x:auto">
         <table class="mt" style="border-collapse:collapse">
-          <thead><tr><th style="border-right:1px solid var(--br)">Lote</th><th style="border-right:1px solid var(--br)">Semana</th><th style="border-right:1px solid var(--br)">Equipo</th><th style="border-right:1px solid var(--br)">% Avance</th><th style="border-right:1px solid var(--br)">% en Balance Hídrico</th><th style="border-right:1px solid var(--br)">Avance real</th><th>Autor</th></tr></thead>
+          <thead><tr><th style="border-right:1px solid var(--br)">Lote</th><th style="border-right:1px solid var(--br)">Semana</th><th style="border-right:1px solid var(--br)">Equipo</th><th style="border-right:1px solid var(--br)">Avance real</th><th>Autor</th></tr></thead>
           <tbody id="tb-riegoft"></tbody>
         </table>
       </div>
@@ -3224,10 +3224,9 @@ function renderRiegoFT(){
     return `
     <tr>
     <td style="${bd}">${r.lote||"—"}</td><td style="${bd}">S${(r.wk??0)+1} · ${fechaSemanaFT(r.wk)}</td><td style="${bd}">${r.equipo||"—"}</td>
-    <td style="${bd}">${r.pct??"—"}%</td><td style="${bd}">${r.cumpl??0}%</td>
     ${celdaAvance}
     <td>${r.autor||"—"}</td></tr>`;
-  }).join(""):`<tr><td colspan="7" style="text-align:center;padding:18px;color:#888">Sin programas de riego cargados todavía</td></tr>`;
+  }).join(""):`<tr><td colspan="5" style="text-align:center;padding:18px;color:#888">Sin programas de riego cargados todavía</td></tr>`;
   const tardios=riegoFTData.filter(esTardioFT).length;
   document.getElementById("ks-riegoft").innerHTML=`
     <div class="k we"><div class="val">${riegoFTFilt.length}</div><div class="lbl">Programas (filtrados)</div></div>
