@@ -228,4 +228,33 @@ try:
 except Exception as e:
     print(f"ERROR token panel: {e}")
 
+# ══════════════════════════════════════════
+# 5. RIEGO FT (Supabase de Pepe)
+# ══════════════════════════════════════════
+print("--- Riego FT (Supabase) ---")
+SUPA_URL = "https://bnaurkovjdnclxtzvdsf.supabase.co"
+SUPA_KEY = "sb_publishable_xKVmeWVkpwJIKNW7P98wNQ_gaMppuM1"
+RIEGO_FILE = "data/riego_ft.json"
+try:
+    headers_supa = {
+        "apikey": SUPA_KEY,
+        "Authorization": f"Bearer {SUPA_KEY}"
+    }
+    r_riego = requests.get(
+        f"{SUPA_URL}/rest/v1/riegos?select=*&order=created_at.desc",
+        headers=headers_supa, timeout=30
+    )
+    print(f"Supabase riegos status: {r_riego.status_code}")
+    r_riego.raise_for_status()
+    registros_riego = r_riego.json()
+    print(f"Registros riego: {len(registros_riego)}")
+    with open(RIEGO_FILE, "w", encoding="utf-8") as f_riego:
+        json.dump({
+            "updated_at": now_str + " UTC",
+            "registros": registros_riego
+        }, f_riego, ensure_ascii=False)
+    print(f"riego_ft.json guardado ({len(registros_riego)} registros)")
+except Exception as e:
+    print(f"ERROR Riego FT: {e}")
+
 print("Fetch completado.")
