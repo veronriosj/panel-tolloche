@@ -226,7 +226,6 @@ table.mt tbody td{padding:6px 9px;border-bottom:1px solid var(--br);vertical-ali
     <button class="tab active" onclick="showTab('t-riegoft',this)">Riego FT</button>
     <button class="tab" onclick="showTab('t-eficiencia',this)">Eficiencia</button>
     <button class="tab" onclick="showTab('t-sta',this)">Estadísticas</button>
-    <button class="tab" onclick="showTab('t-rotacion',this)">Rotación</button>
   </div>
   <div class="navgroup">
     <div class="navgroup-title">Equipos</div>
@@ -489,12 +488,6 @@ table.mt tbody td{padding:6px 9px;border-bottom:1px solid var(--br);vertical-ali
         <div style="display:inline-block">
           <button type="button" onclick="toggleMenuSemanasRFT()" style="border:1px solid var(--br);background:var(--card);border-radius:5px;padding:5px 10px;cursor:pointer;font-size:.85rem" id="frftsem-btn">Toda semana ▾</button>
         </div>
-        <select id="frftest" onchange="filRiegoFT()">
-          <option value="">Todos los estados</option>
-          <option value="pend">Pendientes</option>
-          <option value="ok">Completados</option>
-          <option value="tarde">⚠️ Tardíos (+3 días)</option>
-        </select>
       </div>
       <div id="frftsem-menu" style="display:none;background:#f7f7f2;border:1px solid var(--br);border-radius:6px;padding:8px;margin:-4px 0 11px;max-height:180px;overflow-y:auto;flex-wrap:wrap;gap:2px"></div>
       <div style="background:#fff8e1;border:1px solid #f0d675;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:.82rem;color:#7a5c00">
@@ -865,7 +858,7 @@ let msData=[];
 
 async function fetchMSForms(){
   try{
-    const r=await fetch("data/msforms.json?t="+Date.now());
+    const r=await fetch("data/msforms.json?t="+Date.now(),{cache:"no-store"});
     if(!r.ok){console.warn("msforms.json no encontrado todavía");return;}
     const d=await r.json();
     msData=(d.registros||[]).map(item=>({
@@ -966,7 +959,7 @@ function restaurarUltimaTab(){
 
 async function fetchGeo(){
   try{
-    const r=await fetch("data/geoagris.json?t="+Date.now());
+    const r=await fetch("data/geoagris.json?t="+Date.now(),{cache:"no-store"});
     if(!r.ok)throw new Error("No se encontró data/geoagris.json");
     const d=await r.json();
     GEO=(d.mobiles||[]).filter(m=>norm(m.mobile_name||"").includes("riego"));
@@ -980,7 +973,7 @@ async function fetchGeo(){
 
 async function fetchHistorial(){
   try{
-    const r=await fetch("data/historial.json?t="+Date.now());
+    const r=await fetch("data/historial.json?t="+Date.now(),{cache:"no-store"});
     if(!r.ok)return;
     HISTORIAL=await r.json();
     bGantt();
@@ -3051,7 +3044,7 @@ function esTardioFT(r){
 async function fetchRiegoFT(){
   document.getElementById("rftcnt").textContent="Actualizando...";
   try{
-    const r=await fetch("data/riego_ft.json?t="+Date.now());
+    const r=await fetch("data/riego_ft.json?t="+Date.now(),{cache:"no-store"});
     if(!r.ok)throw new Error("status "+r.status);
     const j=await r.json();
     riegoFTData=j.registros||[];
@@ -3143,7 +3136,7 @@ function aplicarSemanasRFT(){
 function filRiegoFT(){
   const lote=document.getElementById("frftlote").value;
   const eq=document.getElementById("frfteq").value;
-  const est=document.getElementById("frftest").value;
+  const est="";
   riegoFTFilt=riegoFTData.filter(r=>{
     if(lote&&r.lote!==lote)return false;
     if(eq&&r.equipo!==eq)return false;
@@ -4281,10 +4274,11 @@ fetchRiegoFT();
 restaurarUltimaTab();
 setInterval(fetchGeo,5*60*1000);
 setInterval(fetchRiegoFT,60*1000);
+setInterval(()=>{fetchStock();fetchStockRubro();},5*60*1000);
 setInterval(()=>{
   jotData=[];msData=[];
   Promise.all([fetchJot(),fetchMSForms()]).then(combinarYRenderizar);
-},10*60*1000);
+},5*60*1000);
 </script>
 <script src="hidraulica/hidraulica.js"></script>
 </body>
