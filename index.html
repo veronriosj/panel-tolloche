@@ -119,6 +119,7 @@ table.mt thead th:hover{background:var(--v)}
 table.mt tbody tr:nth-child(even){background:var(--ci)}
 table.mt tbody tr:hover{background:#d4ead9}
 table.mt tbody td{padding:6px 9px;border-bottom:1px solid var(--br);vertical-align:middle}
+.pctav{display:inline-block;min-width:52px;padding:3px 10px;border-radius:999px;background:#e8f4ec;border:1px solid var(--vo);color:var(--vo);font-size:1.05rem;font-weight:700;text-align:center}
 .pg{display:flex;align-items:center;justify-content:space-between;margin-top:9px;font-size:.76rem;color:var(--tx2)}
 .pg button{padding:4px 11px;border:1px solid var(--br);border-radius:6px;background:#fff;cursor:pointer;font-size:.76rem}
 .pg button:hover{background:var(--ci)}.pg button:disabled{opacity:.4;cursor:default}
@@ -491,11 +492,11 @@ table.mt tbody td{padding:6px 9px;border-bottom:1px solid var(--br);vertical-ali
       </div>
       <div id="frftsem-menu" style="display:none;background:#f7f7f2;border:1px solid var(--br);border-radius:6px;padding:8px;margin:-4px 0 11px;max-height:180px;overflow-y:auto;flex-wrap:wrap;gap:2px"></div>
       <div style="background:#fff8e1;border:1px solid #f0d675;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:.82rem;color:#7a5c00">
-        ⚠️ El campo <b>Avance real</b> lo debe cargar el operario a cargo del lote/equipo correspondiente.
+        ⚠️ El campo <b>Cumplimiento</b> lo debe cargar el operario a cargo del lote/equipo correspondiente.
       </div>
       <div style="overflow-x:auto">
         <table class="mt" style="border-collapse:collapse">
-          <thead><tr><th style="border-right:1px solid var(--br)">Lote</th><th style="border-right:1px solid var(--br)">Semana</th><th style="border-right:1px solid var(--br)">Equipo</th><th style="border-right:1px solid var(--br)">Avance real</th><th>Autor</th></tr></thead>
+          <thead><tr><th style="border-right:1px solid var(--br)">Lote</th><th style="border-right:1px solid var(--br)">Semana</th><th style="border-right:1px solid var(--br)">Equipo</th><th style="border-right:1px solid var(--br)">%</th><th style="border-right:1px solid var(--br)">Cumplimiento</th><th>Autor</th></tr></thead>
           <tbody id="tb-riegoft"></tbody>
         </table>
       </div>
@@ -3224,9 +3225,10 @@ function renderRiegoFT(){
     return `
     <tr>
     <td style="${bd}">${r.lote||"—"}</td><td style="${bd}">S${(r.wk??0)+1} · ${fechaSemanaFT(r.wk)}</td><td style="${bd}">${r.equipo||"—"}</td>
+    <td style="${bd};text-align:center"><span class="pctav">${r.pct??"—"}%</span></td>
     ${celdaAvance}
     <td>${r.autor||"—"}</td></tr>`;
-  }).join(""):`<tr><td colspan="5" style="text-align:center;padding:18px;color:#888">Sin programas de riego cargados todavía</td></tr>`;
+  }).join(""):`<tr><td colspan="6" style="text-align:center;padding:18px;color:#888">Sin programas de riego cargados todavía</td></tr>`;
   const tardios=riegoFTData.filter(esTardioFT).length;
   document.getElementById("ks-riegoft").innerHTML=`
     <div class="k we"><div class="val">${riegoFTFilt.length}</div><div class="lbl">Programas (filtrados)</div></div>
