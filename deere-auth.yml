@@ -1,0 +1,91 @@
+name: Deere auth (canjear codigo)
+
+on:
+  workflow_dispatch:
+    inputs:
+      code:
+        description: "Codigo de Deere (lo que va despues de code= y antes de &state)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  canjear:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Canjear codigo y guardar DEERE_REFRESH_TOKEN
+        env:
+          CODE_INPUT: ${{ github.event.inputs.code }}
+          DEERE_CLIENT_ID: ${{ secrets.DEERE_CLIENT_ID }}
+          DEERE_CLIENT_SECRET: ${{ secrets.DEERE_CLIENT_SECRET }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          REPO: ${{ github.repository }}
+        run: |
+          pip install --quiet pynacl requests
+          python3 - <<'PY'
+          import os, sys, base64, requests
+          from urllib.parse import urlparse, parse_qs, unquote
+
+          TOKEN_URL = "https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7/v1/token"
+          REDIRECT = "http://localhost:9090/callback"
+
+          # Limpiar el codigo (acepta solo el codigo o la URL completa)
+          raw = os.environ["CODE_INPUT"].strip()
+          if "code=" in raw:
+              raw = parse_qs(urlparse(raw).query).get("code", [raw.split("code=")[1].split("&")[0]])[0]
+          code = unquote(raw.split("&")[0])
+
+          cid = os.environ["DEERE_CLIENT_ID"]
+          sec = os.environ["DEERE_CLIENT_SECRET"]
+          if not cid or not sec:
+              sys.exit("Faltan DEERE_CLIENT_ID o DEERE_CLIENT_SECRET en Secrets")
+
+          r = requests.post(
+              TOKEN_URL,
+              auth=(cid, sec),
+              headers={"Accept": "application/json"},
+              data={"grant_type": "authorization_code", "code": code, "redirect_uri": REDIRECT},
+              timeout=30,
+          )
+          print("Deere HTTP:", r.status_code)
+          try:
+              j = r.json()
+          except Exception:
+              sys.exit("Respuesta no JSON de Deere (revisar endpoint)")
+
+          if r.status_code != 200 or "refresh_token" not in j:
+              # Solo campos de error, nunca tokens
+              print("error:", j.get("error"))
+              print("error_description:", j.get("error_description"))
+              print("errorCode:", j.get("errorCode"), "|", j.get("errorSummary"))
+              sys.exit("No se obtuvo refresh_token. Repetir con un codigo nuevo (dura ~1 min).")
+
+          rt = j["refresh_token"]
+          print(f"::add-mask::{rt}")
+          print("scope concedido:", j.get("scope"))
+          print("refresh_token recibido: SI")
+
+          # Guardar como secret del repo (cifrado con la clave publica del repo)
+          from nacl import encoding, public
+          H = {
+              "Authorization": f"Bearer {os.environ['GH_PAT']}",
+              "Accept": "application/vnd.github+json",
+          }
+          repo = os.environ["REPO"]
+          k = requests.get(f"https://api.github.com/repos/{repo}/actions/secrets/public-key", headers=H, timeout=30)
+          print("GitHub public-key HTTP:", k.status_code)
+          k.raise_for_status()
+          kj = k.json()
+          pk = public.PublicKey(kj["key"].encode(), encoding.Base64Encoder())
+          enc = base64.b64encode(public.SealedBox(pk).encrypt(rt.encode())).decode()
+          p = requests.put(
+              f"https://api.github.com/repos/{repo}/actions/secrets/DEERE_REFRESH_TOKEN",
+              headers=H,
+              json={"encrypted_value": enc, "key_id": kj["key_id"]},
+              timeout=30,
+          )
+          print("GitHub guardar secret HTTP:", p.status_code, "(201=creado, 204=actualizado)")
+          p.raise_for_status()
+          print("LISTO: DEERE_REFRESH_TOKEN guardado en Secrets")
+          PY
