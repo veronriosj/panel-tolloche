@@ -231,6 +231,7 @@ table.mt tbody td{padding:6px 9px;border-bottom:1px solid var(--br);vertical-ali
     <div class="navgroup-title">Equipos</div>
     <button class="tab" onclick="showTab('t-est',this)">Estados GeoAgris</button>
     <button class="tab" onclick="showTab('t-bg',this)">Bombas y Generadores</button>
+    <button class="tab" onclick="showTab('t-flota',this)">Flota</button>
   </div>
   <div class="navgroup">
     <div class="navgroup-title">Mantenimiento</div>
@@ -386,6 +387,27 @@ table.mt tbody td{padding:6px 9px;border-bottom:1px solid var(--br);vertical-ali
 -->
 
 <!-- STOCK REPUESTOS -->
+<div id="t-flota" class="panel">
+  <div class="card">
+    <div class="ch">
+      <h3>Flota — camiones de riego (telemetría)</h3>
+      <span id="flota-sync" style="font-size:.72rem;color:var(--tx2)">Cargando...</span>
+    </div>
+    <div class="cb">
+      <div style="overflow-x:auto">
+        <table class="mt">
+          <thead><tr>
+            <th>Camión</th><th>Modelo</th><th>Horas de motor</th><th>Último tramo</th><th>Último reporte</th><th>Ubicación</th>
+          </tr></thead>
+          <tbody id="flota-tbody"><tr><td colspan="6" style="text-align:center;color:var(--tx2)">Cargando...</td></tr></tbody>
+        </table>
+      </div>
+      <div id="mapdiv-flota" style="height:380px;border-radius:8px;margin-top:12px;border:1px solid var(--br)"></div>
+      <p style="font-size:.72rem;color:var(--tx2);margin-top:8px">La telemetría reporta aproximadamente una vez por hora. Si un camión no reporta hace más de 24 h aparece en naranja, y en rojo pasadas las 72 h.</p>
+    </div>
+  </div>
+</div>
+
 <div id="t-stk" class="panel">
   <div class="ks" id="ks-stk"></div>
   <div class="card">
@@ -940,12 +962,83 @@ function showTab(id,btn){
   if(id==="t-sta"&&!stB)loadChartJS(bStats);
   if(id==="t-sta")loadChartJS(renderGraficoEficienciaFT);
   if(id==="t-rotacion")renderRotacionFT();
+  if(id==="t-flota")renderFlota();
   if(id==="t-pedsta")loadChartJS(bPedStats);
   // En celular, cerrar el menú lateral al elegir una pestaña
   const sb=document.getElementById("sidebar");
   if(sb&&sb.classList.contains("open"))toggleSidebar();
 
   try{localStorage.setItem("panelTollocheLastTab",id);}catch(e){}
+}
+
+// ── FLOTA — lee data/jdlink.json generado por GitHub Actions (cada 1 hora) ──
+let flotaData=null,mapaFlota=null,flotaLayer=null;
+async function fetchFlota(){
+  try{
+    const r=await fetch("data/jdlink.json?t="+Date.now(),{cache:"no-store"});
+    if(!r.ok)throw new Error("No se encontró data/jdlink.json");
+    flotaData=await r.json();
+  }catch(e){console.warn("Flota:",e);flotaData=null;}
+  renderFlota();
+}
+function escFlota(t){return String(t==null?"":t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function fechaFlota(iso){
+  if(!iso)return "—";
+  const d=new Date(iso);
+  if(isNaN(d))return "—";
+  return d.toLocaleString("es-AR",{timeZone:"America/Argentina/Buenos_Aires",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
+}
+function renderFlota(){
+  const tb=document.getElementById("flota-tbody");
+  const sync=document.getElementById("flota-sync");
+  if(!tb)return;
+  if(!flotaData||!flotaData.equipos){
+    tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--tx2)">Sin datos de flota todavía</td></tr>';
+    if(sync)sync.textContent="";
+    return;
+  }
+  if(sync&&flotaData.updated_at){
+    const u=new Date(flotaData.updated_at.replace(" UTC","Z").replace(" ","T"));
+    sync.textContent="Actualizado: "+fechaFlota(u.toISOString());
+  }
+  const ahora=Date.now();
+  tb.innerHTML=flotaData.equipos.map(e=>{
+    const rep=e.ultimo_reporte?new Date(e.ultimo_reporte).getTime():null;
+    const horasSin=rep?(ahora-rep)/3600000:null;
+    const col=horasSin===null?"var(--tx2)":horasSin>72?"var(--al)":horasSin>24?"var(--me)":"var(--vo)";
+    const hm=e.horas_motor!=null?e.horas_motor.toLocaleString("es-AR",{minimumFractionDigits:1,maximumFractionDigits:1})+" h":"—";
+    let tramo="—";
+    if(e.tramo){
+      tramo=(e.tramo.estado===1?"🟢 Encendido":"⚪ Apagado")+'<br><span style="font-size:.72rem;color:var(--tx2)">hasta '+fechaFlota(e.tramo.fin)+"</span>";
+    }
+    const ub=(e.lat!=null&&e.lon!=null&&(e.lat!==0||e.lon!==0))
+      ?'<a href="https://www.google.com/maps?q='+e.lat+","+e.lon+'" target="_blank" rel="noopener">Ver en mapa</a>':"—";
+    return '<tr><td><b>'+escFlota(e.nombre)+'</b></td><td>'+escFlota(e.modelo)+'</td><td>'+hm+'</td><td>'+tramo+
+      '</td><td style="color:'+col+';font-weight:600">'+fechaFlota(e.ultimo_reporte)+'</td><td>'+ub+'</td></tr>';
+  }).join("")||'<tr><td colspan="6" style="text-align:center;color:var(--tx2)">Sin equipos</td></tr>';
+
+  // Mapa: solo se crea cuando la pestaña está visible (si no, Leaflet mide mal el contenedor)
+  const panel=document.getElementById("t-flota");
+  if(!panel||!panel.classList.contains("active")||typeof L==="undefined")return;
+  if(!mapaFlota){
+    mapaFlota=L.map("mapdiv-flota",{scrollWheelZoom:true});
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{
+      attribution:"&copy; OSM &copy; CARTO",maxZoom:19,subdomains:"abcd"}).addTo(mapaFlota);
+    mapaFlota.setView([-25.435,-63.69],11);
+  }
+  setTimeout(()=>{
+    mapaFlota.invalidateSize();
+    if(flotaLayer)mapaFlota.removeLayer(flotaLayer);
+    flotaLayer=L.layerGroup().addTo(mapaFlota);
+    const pts=[];
+    flotaData.equipos.forEach(e=>{
+      if(e.lat==null||e.lon==null||(e.lat===0&&e.lon===0))return;
+      pts.push([e.lat,e.lon]);
+      L.marker([e.lat,e.lon]).addTo(flotaLayer)
+        .bindPopup("<b>"+escFlota(e.nombre)+"</b><br>Último reporte: "+fechaFlota(e.ultimo_reporte));
+    });
+    if(pts.length)mapaFlota.fitBounds(pts,{padding:[40,40],maxZoom:15});
+  },250);
 }
 
 function restaurarUltimaTab(){
@@ -4271,9 +4364,11 @@ fetchGeo();
 cargarBGdesdeGitHub();
 fetchReparaciones().then(()=>renderBG());
 fetchRiegoFT();
+fetchFlota();
 restaurarUltimaTab();
 setInterval(fetchGeo,5*60*1000);
 setInterval(fetchRiegoFT,60*1000);
+setInterval(fetchFlota,15*60*1000);
 setInterval(()=>{fetchStock();fetchStockRubro();},5*60*1000);
 setInterval(()=>{
   jotData=[];msData=[];
