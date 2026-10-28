@@ -95,18 +95,31 @@ jobs:
           if d:
               for o in d.get("values", []):
                   print("   org:", o.get("id"), "|", o.get("name"))
+                  print("   campos org:", sorted(o.keys()))
+                  for l in o.get("links", []):
+                      print("   link org:", l.get("rel"), "->", l.get("uri") or l.get("href"))
                   if "9953940" in str(o.get("id")):
                       org = str(o.get("id"))
           print("Usando org:", org)
 
           # ---- 3. Equipos (dos APIs posibles)
           machines = []
-          for path in (f"/organizations/{org}/machines", f"/organizations/{org}/equipment"):
+          for path in (f"/organizations/{org}/machines", f"/machines?organizationIds={org}",
+                       f"/equipment?organizationIds={org}", f"/organizations/{org}/equipment",
+                       "/machines"):
               d = get(BASE + path, path)
               if d and d.get("values"):
                   machines = d["values"]
                   print(f"   {len(machines)} equipos en {path}")
                   break
+          if not machines:
+              x = requests.get(f"{BASE}/organizations/{org}/machines", headers=HD, timeout=40)
+              print("403 detalle -> www-authenticate:", x.headers.get("www-authenticate"),
+                    "| x-deere-error:", x.headers.get("x-deere-error-code") or x.headers.get("x-deere-message"))
+              print("   cabeceras:", sorted(x.headers.keys()))
+              x = requests.get(f"{BASE}/organizations/{org}/machines",
+                               headers={"Authorization": f"Bearer {at}", "Accept": "application/json"}, timeout=40)
+              print("   con Accept json HTTP:", x.status_code, x.text[:200])
 
           # ---- 4. Detalle de cada equipo
           INTERES = ("hours", "alert", "location", "devicestate", "engine", "breadcrumb", "telemetry", "fuel")
