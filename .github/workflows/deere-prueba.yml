@@ -122,29 +122,37 @@ jobs:
                   break
           # ---- 4. Detalle de cada equipo
           INTERES = ("hours", "alert", "location", "devicestate", "engine", "breadcrumb", "telemetry", "fuel")
+          def mostrar(dd, tag):
+              vals = dd.get("values", dd) if isinstance(dd, dict) else dd
+              n = len(vals) if isinstance(vals, list) else 1
+              print(f"   {tag}: registros={n}")
+              print("   muestra:", json.dumps(clean(vals))[:450])
           for m in machines:
               mid = m.get("id")
-              print("\n=== EQUIPO:", mid, "|", m.get("name") or m.get("displayName"), "===")
-              print("   campos:", sorted(m.keys()))
-              links = m.get("links", [])
-              rels = [(l.get("rel"), l.get("uri") or l.get("href")) for l in links]
-              print("   links disponibles:", [rl for rl, _ in rels])
-              hechos = 0
-              for rel, href in rels:
-                  if href and rel and any(s in rel.lower() for s in INTERES):
-                      dd = get(href, f"{mid}/{rel}")
-                      hechos += 1
-                      if dd is not None:
-                          vals = dd.get("values", dd)
-                          n = len(vals) if isinstance(vals, list) else 1
-                          print("   registros:", n)
-                          print("   muestra:", json.dumps(clean(vals))[:450])
-              if hechos == 0:
-                  for suf in ("engine-hours", "hours-of-operation", "alerts", "location-history", "device-state-reports"):
-                      dd = get(f"https://api.deere.com/isg/equipment/{mid}/{suf}", f"{mid}/{suf}")
-                      if dd is not None:
-                          vals = dd.get("values", dd)
-                          print("   registros:", len(vals) if isinstance(vals, list) else 1)
-                          print("   muestra:", json.dumps(clean(vals))[:450])
+              print("\n=== EQUIPO:", mid, "|", m.get("name"), "===")
+              for k in ("principalId", "isgType", "telematicsCapable", "make", "model", "type", "organizationRole", "archived"):
+                  print(f"   {k}: {m.get(k)}")
+              print("   serie (largo):", len(str(m.get("serialNumber", ""))))
+              ids = []
+              for c in (mid, m.get("principalId")):
+                  if c and str(c) not in ids:
+                      ids.append(str(c))
+              for cid in ids:
+                  print(f"  -- probando id {cid}")
+                  for base in ("https://api.deere.com/platform/machines", "https://api.deere.com/isg/equipment"):
+                      dd = get(f"{base}/{cid}", f"{base.split('.com')[1]}/{cid}")
+                      if isinstance(dd, dict):
+                          print("   campos:", sorted(dd.keys()))
+                          rels = [(l.get("rel"), l.get("uri") or l.get("href")) for l in dd.get("links", [])]
+                          print("   links:", [r for r, _ in rels])
+                          for rel, href in rels:
+                              if href and rel and any(t in rel.lower() for t in INTERES):
+                                  d2 = get(href, f"{cid}/{rel}")
+                                  if d2 is not None:
+                                      mostrar(d2, rel)
+                  for suf in ("engineHours", "hoursOfOperation", "alerts", "locationHistory", "deviceStateReports"):
+                      d2 = get(f"https://api.deere.com/platform/machines/{cid}/{suf}", f"platform/{cid}/{suf}")
+                      if d2 is not None:
+                          mostrar(d2, suf)
           print("\nFIN")
           PY
