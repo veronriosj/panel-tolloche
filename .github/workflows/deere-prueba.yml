@@ -1,0 +1,138 @@
+name: Deere prueba (diagnostico)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prueba:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consultar equipos en Deere (solo resumen, sin coordenadas)
+        env:
+          DEERE_CLIENT_ID: ${{ secrets.DEERE_CLIENT_ID }}
+          DEERE_CLIENT_SECRET: ${{ secrets.DEERE_CLIENT_SECRET }}
+          DEERE_REFRESH_TOKEN: ${{ secrets.DEERE_REFRESH_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          REPO: ${{ github.repository }}
+        run: |
+          pip install --quiet pynacl requests
+          python3 - <<'PY'
+          import os, sys, json, base64, requests
+
+          TOKEN_URL = "https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7/v1/token"
+          BASE = "https://partnerapi.deere.com/platform"
+          ORG_FALLBACK = "9953940"
+          ACCEPT = "application/vnd.deere.axiom.v3+json"
+
+          # ---- 1. Renovar token
+          r = requests.post(
+              TOKEN_URL,
+              auth=(os.environ["DEERE_CLIENT_ID"], os.environ["DEERE_CLIENT_SECRET"]),
+              headers={"Accept": "application/json"},
+              data={"grant_type": "refresh_token",
+                    "refresh_token": os.environ["DEERE_REFRESH_TOKEN"],
+                    "scope": "offline_access org1 eq1"},
+              timeout=30)
+          print("Renovar token HTTP:", r.status_code)
+          j = r.json()
+          if r.status_code != 200 or "access_token" not in j:
+              print("error:", j.get("error"), "|", j.get("error_description"))
+              sys.exit("No se pudo renovar el token")
+          at = j["access_token"]
+          print(f"::add-mask::{at}")
+          print("scope:", j.get("scope"))
+
+          # Si Deere rota el refresh token, guardar el nuevo
+          new_rt = j.get("refresh_token")
+          if new_rt and new_rt != os.environ["DEERE_REFRESH_TOKEN"]:
+              print(f"::add-mask::{new_rt}")
+              from nacl import encoding, public
+              H = {"Authorization": f"Bearer {os.environ['GH_PAT']}",
+                   "Accept": "application/vnd.github+json"}
+              repo = os.environ["REPO"]
+              k = requests.get(f"https://api.github.com/repos/{repo}/actions/secrets/public-key", headers=H, timeout=30).json()
+              pk = public.PublicKey(k["key"].encode(), encoding.Base64Encoder())
+              enc = base64.b64encode(public.SealedBox(pk).encrypt(new_rt.encode())).decode()
+              p = requests.put(f"https://api.github.com/repos/{repo}/actions/secrets/DEERE_REFRESH_TOKEN",
+                               headers=H, json={"encrypted_value": enc, "key_id": k["key_id"]}, timeout=30)
+              print("Refresh token rotado, guardado HTTP:", p.status_code)
+          else:
+              print("Refresh token: sin rotacion")
+
+          HD = {"Authorization": f"Bearer {at}", "Accept": ACCEPT}
+
+          SENS = ("lat", "lon", "point", "coord", "geometry", "address")
+          def clean(o):
+              if isinstance(o, dict):
+                  return {k: ("<oculto>" if any(s in k.lower() for s in SENS) else clean(v)) for k, v in o.items()}
+              if isinstance(o, list):
+                  return [clean(x) for x in o[:2]]
+              return o
+
+          def get(url, label):
+              try:
+                  x = requests.get(url, headers=HD, timeout=40)
+              except Exception as e:
+                  print(f"[{label}] ERROR {e}")
+                  return None
+              print(f"[{label}] HTTP {x.status_code}")
+              try:
+                  d = x.json()
+              except Exception:
+                  print("   respuesta no JSON:", x.text[:150])
+                  return None
+              if x.status_code != 200:
+                  print("   ", json.dumps(d)[:250])
+                  return None
+              return d
+
+          # ---- 2. Organizaciones
+          d = get(f"{BASE}/organizations", "organizations")
+          org = ORG_FALLBACK
+          if d:
+              for o in d.get("values", []):
+                  print("   org:", o.get("id"), "|", o.get("name"))
+                  if "9953940" in str(o.get("id")):
+                      org = str(o.get("id"))
+          print("Usando org:", org)
+
+          # ---- 3. Equipos (dos APIs posibles)
+          machines = []
+          for path in (f"/organizations/{org}/machines", f"/organizations/{org}/equipment"):
+              d = get(BASE + path, path)
+              if d and d.get("values"):
+                  machines = d["values"]
+                  print(f"   {len(machines)} equipos en {path}")
+                  break
+
+          # ---- 4. Detalle de cada equipo
+          INTERES = ("hours", "alert", "location", "devicestate", "engine", "breadcrumb", "telemetry", "fuel")
+          for m in machines:
+              mid = m.get("id")
+              print("\n=== EQUIPO:", mid, "|", m.get("name") or m.get("displayName"), "===")
+              print("   campos:", sorted(m.keys()))
+              links = m.get("links", [])
+              rels = [(l.get("rel"), l.get("uri") or l.get("href")) for l in links]
+              print("   links disponibles:", [rl for rl, _ in rels])
+              hechos = 0
+              for rel, href in rels:
+                  if href and rel and any(s in rel.lower() for s in INTERES):
+                      dd = get(href, f"{mid}/{rel}")
+                      hechos += 1
+                      if dd is not None:
+                          vals = dd.get("values", dd)
+                          n = len(vals) if isinstance(vals, list) else 1
+                          print("   registros:", n)
+                          print("   muestra:", json.dumps(clean(vals))[:450])
+              if hechos == 0:
+                  for suf in ("engineHours", "hoursOfOperation", "alerts", "locationHistory", "deviceStateReports"):
+                      dd = get(f"{BASE}/machines/{mid}/{suf}", f"{mid}/{suf}")
+                      if dd is not None:
+                          vals = dd.get("values", dd)
+                          print("   registros:", len(vals) if isinstance(vals, list) else 1)
+                          print("   muestra:", json.dumps(clean(vals))[:450])
+          print("\nFIN")
+          PY
